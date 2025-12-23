@@ -17,6 +17,7 @@ const envFilePath = [`.env.${process.env.NODE_ENV || 'development'}`, '.env'];
       isGlobal: true,
       envFilePath,
       validationSchema: schema,
+      expandVariables: true,
     }),
   ],
 })
