@@ -22,10 +22,10 @@ async function bootstrap() {
     app.enableCors();
   }
 
-  const prefix = configService.get<string>('PREFIX', '/api');
+  const prefix = configService.get('PREFIX', '/api');
   app.setGlobalPrefix(prefix);
 
-  const versionString = configService.get<string>('VERSION', '1');
+  const versionString = configService.get('VERSION', '1');
   let version: string[] = [versionString];
   if (versionString && versionString.indexOf(',')) {
     version = versionString.split(',');
@@ -35,7 +35,7 @@ async function bootstrap() {
     defaultVersion: versionString ? version : VERSION_NEUTRAL,
   });
 
-  const port = configService.get<number>('PORT', 3000);
+  const port = configService.get('PORT', 3000);
   await app.listen(port);
 }
 bootstrap();
