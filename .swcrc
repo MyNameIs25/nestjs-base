@@ -1,5 +1,6 @@
 {
   "$schema": "https://swc.rs/schema.json",
+  "sourceMaps": true,
   "jsc": {
     "parser": {
       "syntax": "typescript",
@@ -10,11 +11,7 @@
       "legacyDecorator": true,
       "decoratorMetadata": true
     },
-    "target": "es2022",
-    "keepClassNames": true
+    "baseUrl": "./"
   },
-  "module": {
-    "type": "commonjs"
-  },
-  "sourceMaps": true
+  "minify": false
 }

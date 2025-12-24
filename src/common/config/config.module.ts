@@ -8,6 +8,7 @@ const schema = Joi.object({
     .default('development'),
   PORT: Joi.number().default(3000),
   DB_HOST: Joi.string().ip().default('127.0.0.1'),
+  REDIS_URL: Joi.string().default('redis://localhost:6379'),
 });
 const envFilePath = [`.env.${process.env.NODE_ENV || 'development'}`, '.env'];
 
