@@ -1,0 +1,14 @@
+include:
+  # Storage
+  - path: docker/storage/postgres.yml
+    project_directory: .
+
+  # Auth service
+  - path: docker/auth/compose.override.yml
+    project_directory: .
+    env_file: docker/auth/.env.docker
+
+  # Payments service
+  - path: docker/payments/compose.override.yml
+    project_directory: .
+    env_file: docker/payments/.env.docker

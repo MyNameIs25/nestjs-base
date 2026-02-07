@@ -1,7 +1,8 @@
 ---
 paths:
-  - src/**/*.spec.ts
-  - test/**/*.e2e-spec.ts
+  - apps/**/src/**/*.spec.ts
+  - libs/**/src/**/*.spec.ts
+  - apps/**/test/**/*.e2e-spec.ts
 ---
 
 # Testing Conventions

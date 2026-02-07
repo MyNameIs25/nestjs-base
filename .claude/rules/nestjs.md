@@ -1,6 +1,7 @@
 ---
 paths:
-  - src/**/*.ts
+  - apps/**/src/**/*.ts
+  - libs/**/src/**/*.ts
 ---
 
 # NestJS Structural Conventions
