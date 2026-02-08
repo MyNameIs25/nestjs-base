@@ -1,5 +1,9 @@
 packages:
-  - 'apps/*'
-  - 'libs/*'
+  - apps/*
+  - libs/*
+
+ignoredBuiltDependencies:
+  - nx
+
 onlyBuiltDependencies:
   - '@nestjs/core'

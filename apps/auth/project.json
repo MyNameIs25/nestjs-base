@@ -1,0 +1,14 @@
+{
+  "name": "auth",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/auth/src",
+  "projectType": "application",
+  "tags": ["scope:auth", "type:app"],
+  "targets": {
+    "build": {},
+    "serve": {},
+    "test": {},
+    "lint": {},
+    "e2e": {}
+  }
+}

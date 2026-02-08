@@ -36,7 +36,7 @@ The project uses a **base + override** pattern:
 The Dockerfile uses `APP_NAME` to:
 
 - Copy only the target app's `package.json` and source
-- Run `pnpm run build $APP_NAME`
+- Run `npx nx build $APP_NAME`
 - Set the production `CMD` to `node dist/apps/$APP_NAME/main`
 
 ## Dockerfile Stages
@@ -55,7 +55,7 @@ In development, `docker/base.yml` bind-mounts:
 - `apps/<APP_NAME>/src/` — the app's source directory
 - `libs/common/src/` — the shared library source
 
-This allows `nest start --watch` inside the container to detect file changes on the host.
+This allows `nx serve` inside the container to detect file changes on the host.
 
 When adding a new shared library, add its `src/` directory as an additional volume mount in `docker/base.yml`.
 
