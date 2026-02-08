@@ -6,7 +6,7 @@ services:
       args:
         APP_NAME: ${APP_NAME}
     container_name: ${APP_NAME}
-    command: pnpm run start:dev ${APP_NAME}
+    command: pnpm -w run serve ${APP_NAME}
     depends_on:
       - postgres
     environment:

@@ -4,39 +4,51 @@
   <a href="README.ja.md">日本語</a>
 </p>
 
+[![CI](https://github.com/MyNameIs25/nestjs-base/actions/workflows/ci.yml/badge.svg)](https://github.com/MyNameIs25/nestjs-base/actions/workflows/ci.yml)
+
 # NestJS Monorepo
 
-**0/initialization** ブランチから派生した NestJS monorepo プロジェクトです。
+**Nx** をビルドオーケストレーションに使用し、**1/monorepo-setup** から派生した NestJS monorepo プロジェクトです。
 複数のアプリが共通ライブラリを共有し、さまざまなライブラリ実装（ロギング、エラーハンドリング、設定など）を比較します。
 
 ## プロジェクト構成
 
 ```text
 ├── apps/
-│   └── auth/                       # Auth マイクロサービス
-│       ├── src/
-│       │   ├── main.ts             # ブートストラップエントリポイント
-│       │   ├── auth.module.ts      # ルートモジュール
-│       │   ├── auth.controller.ts
-│       │   └── auth.service.ts
-│       ├── test/                   # E2E テスト
-│       ├── package.json            # アプリレベルの依存関係
-│       └── tsconfig.app.json
+│   ├── auth/                       # Auth マイクロサービス（デフォルト、ポート 3000）
+│   │   ├── src/
+│   │   │   ├── main.ts             # ブートストラップエントリポイント
+│   │   │   ├── auth.module.ts      # ルートモジュール
+│   │   │   ├── auth.controller.ts
+│   │   │   └── auth.service.ts
+│   │   ├── test/                   # E2E テスト
+│   │   ├── package.json            # アプリレベルの依存関係
+│   │   ├── project.json            # Nx プロジェクト設定
+│   │   ├── jest.config.ts          # プロジェクト別 Jest 設定
+│   │   └── tsconfig.app.json
+│   └── payments/                   # Payments マイクロサービス（ポート 3001）
 ├── libs/
 │   └── common/                     # 共有ライブラリ (@app/common)
 │       ├── src/
 │       │   ├── index.ts            # 公開 API バレルファイル
 │       │   ├── common.module.ts
 │       │   └── common.service.ts
+│       ├── project.json            # Nx プロジェクト設定
+│       ├── jest.config.ts          # プロジェクト別 Jest 設定
 │       └── tsconfig.lib.json
 ├── docker/
 │   ├── base.yml                    # 共有 Docker Compose サービステンプレート
-│   └── auth/
-│       ├── compose.override.yml    # Auth 固有の compose オーバーライド
-│       └── .env.docker             # APP_NAME=auth
+│   ├── auth/
+│   │   ├── compose.override.yml    # Auth 固有の compose オーバーライド
+│   │   └── .env.docker             # APP_NAME=auth
+│   └── payments/
+│       ├── compose.override.yml    # Payments 固有の compose オーバーライド
+│       └── .env.docker             # APP_NAME=payments
 ├── docker-compose.yml              # 各アプリの compose ファイルをインクルード
 ├── Dockerfile                      # マルチステージビルド（development + production）
 ├── Makefile                        # Docker 便利コマンド
+├── nx.json                         # Nx ワークスペース設定（キャッシュ、パイプライン）
+├── jest.preset.js                  # 共有 Jest プリセット
 ├── nest-cli.json                   # Monorepo プロジェクト定義
 ├── pnpm-workspace.yaml             # ワークスペース定義
 └── tsconfig.json                   # ルート TS 設定とパスエイリアス
@@ -44,13 +56,14 @@
 
 ## Monorepo 設計
 
-本プロジェクトは **NestJS monorepo** と **pnpm workspaces** を使用して依存関係を管理しています。
+本プロジェクトは **NestJS monorepo** と **pnpm workspaces** を使用して依存関係を管理し、**Nx** でビルドオーケストレーション、計算キャッシュ、モジュール境界の強制を行います。
 
 ### 仕組み
 
 - **`nest-cli.json`** はすべてのアプリとライブラリを `"monorepo": true` で登録します。NestJS CLI はこれを使用して、正しいプロジェクトのビルド、起動、コード生成を行います。
 - **`pnpm-workspace.yaml`** は `apps/*` をワークスペースパッケージとして宣言し、各アプリに独自の `package.json` を持たせて依存関係を分離します。
 - **`tsconfig.json`** はパスエイリアス（例：`@app/common`）を定義し、どのアプリからでも相対パスなしで共有ライブラリをインポートできます。
+- **Nx** がビルド、テスト、リントを計算キャッシュと `affected` コマンドで編成します。各プロジェクトにはターゲットとタグを定義する `project.json` があります。
 - 各アプリは独自の `main.ts` エントリポイント、ルートモジュール、ビルド設定を持ち、独立してビルド・デプロイが可能です。
 - ライブラリ（`libs/`）にはパスエイリアスで参照される共有コードが含まれ、ビルド時に各アプリにバンドルされます——独立したパッケージとしては公開されません。
 
@@ -64,8 +77,8 @@
 
 ### デメリット
 
-- **ビルドの結合** — 共有ライブラリの変更は、それに依存するすべてのアプリの再ビルドが必要です。CI パイプラインは依存関係グラフを把握する必要があります。
-- **スケーラビリティの制限** — アプリ数の増加に伴い、インストールとビルドの時間も増加します。大規模な monorepo では Nx や Turborepo などのツールによるインクリメンタルビルドが必要になる場合があります。
+- **ビルドの結合** — 共有ライブラリの変更は、それに依存するすべてのアプリの再ビルドが必要です。Nx の `affected` コマンドにより、変更された部分のみを再ビルドすることで緩和されます。
+- **スケーラビリティの制限** — アプリ数の増加に伴い、インストールとビルドの時間も増加します。Nx の計算キャッシュとタスクグラフオーケストレーションにより、未変更の作業をスキップすることで対処します。
 - **依存関係バージョンの共有** — すべてのアプリがルートレベルの依存関係の同じバージョンを共有します。パッケージ（例：NestJS）のアップグレードはすべてに影響します。
 - **IDE パフォーマンス** — 多くのプロジェクトを含む大規模な monorepo は TypeScript 言語サーバーやファイルインデックスを遅くする可能性があります。
 
@@ -79,7 +92,7 @@ Docker 構成は**単一のパラメータ化された Dockerfile** と**コン�
 
 | ステージ | 目的 |
 | --- | --- |
-| **development** | すべての依存関係をインストールし、ソースをコピーして `pnpm run build` を実行。compose と組み合わせてホットリロード開発に使用。 |
+| **development** | すべての依存関係をインストールし、ソースをコピーして `pnpm -w exec nx build` を実行。compose と組み合わせてホットリロード開発に使用。 |
 | **production** | 本番依存関係のみをインストールし、development ステージからビルド済みの `dist/` をコピー。`node dist/apps/<APP_NAME>/main` を実行。 |
 
 同じ Dockerfile でどのアプリもビルドできます——`APP_NAME` ビルド引数を変えるだけです。
@@ -97,7 +110,7 @@ docker/
     .env.docker                 ← APP_NAME=auth
 ```
 
-- **`docker/base.yml`** — `${APP_NAME}` 変数補間を使用した再利用可能なサービステンプレートを定義します。ビルドコンテキスト、ビルド引数、コンテナ命名、開発コマンド（`pnpm run start:dev`）、環境変数、ソースボリュームマウント（ホットリロード対応）を処理します。
+- **`docker/base.yml`** — `${APP_NAME}` 変数補間を使用した再利用可能なサービステンプレートを定義します。ビルドコンテキスト、ビルド引数、コンテナ命名、開発コマンド（`pnpm -w run serve`）、環境変数、ソースボリュームマウント（ホットリロード対応）を処理します。
 - **`docker/<app>/compose.override.yml`** — 各アプリ固有の設定のみを含みます：サービス名とポートマッピング。それ以外は `extends` で継承されます。
 - **`docker-compose.yml`** — `include` を使用して各アプリの compose ファイルを取り込み、`project_directory: .` でプロジェクトルートからのパス解決を行い、`env_file` で `APP_NAME` 変数を注入します。
 
@@ -118,9 +131,32 @@ docker/
 nest generate app <app-name>
 ```
 
-`apps/<app-name>/` ディレクトリにソースファイルと `tsconfig.app.json` が作成され、`nest-cli.json` にプロジェクトが登録されます。
+`apps/<app-name>/` ディレクトリにソースファイルと `tsconfig.app.json` が作成され、`nest-cli.json` にプロジェクトが登録されます。次に、新しいワークスペースパッケージの依存関係をインストールします：
 
-### 2. Docker 設定を作成
+```bash
+pnpm install
+```
+
+### 2. Nx プロジェクト設定を作成
+
+`apps/auth/project.json` のパターンに従って `apps/<app-name>/project.json` を作成：
+
+```json
+{
+  "name": "<app-name>",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/<app-name>/src",
+  "projectType": "application",
+  "tags": ["scope:<app-name>", "type:app"],
+  "targets": { }
+}
+```
+
+`apps/auth/jest.config.ts` のパターンに従って `apps/<app-name>/jest.config.ts` を作成。
+
+`eslint.config.mjs` に `scope:<app-name>` の依存制約を追加。
+
+### 3. Docker 設定を作成
 
 ```bash
 mkdir docker/<app-name>
@@ -144,7 +180,7 @@ services:
       - '<port>:<port>'
 ```
 
-### 3. Docker Compose に登録
+### 4. Docker Compose に登録
 
 `docker-compose.yml` に追加：
 
@@ -154,7 +190,7 @@ services:
     env_file: docker/<app-name>/.env.docker
 ```
 
-### 4. ビルドと実行
+### 5. ビルドと実行
 
 ```bash
 make build && make up
@@ -164,12 +200,14 @@ make logs                # 新しいサービスを選択
 ## 開発
 
 ```bash
-pnpm install                        # すべての依存関係をインストール
-pnpm run start:dev                  # 開発サーバー（auth）ウォッチモード
-pnpm run start:dev <app-name>       # 特定のアプリの開発サーバー
-pnpm run lint                       # ESLint 自動修正
-pnpm run format                     # Prettier フォーマット
-pnpm run test                       # ユニットテスト
-pnpm run test:e2e                   # E2E テスト
-pnpm run test:cov                   # テストカバレッジ
+pnpm install                              # すべての依存関係をインストール
+pnpm serve <app-name>                     # 開発サーバー（ウォッチモード）
+pnpm serve <app-name> --configuration=debug  # デバッグモード
+pnpm lint                                 # ESLint 全プロジェクト検査
+pnpm format                               # Prettier フォーマット
+pnpm test                                 # 全プロジェクトのユニットテスト
+pnpm test:cov                             # テストカバレッジ
+pnpm test:e2e                             # 全アプリの E2E テスト
+pnpm graph                                # 依存関係グラフを開く
+pnpm affected -t test                     # 影響を受けたプロジェクトのみテスト
 ```

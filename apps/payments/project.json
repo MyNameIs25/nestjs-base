@@ -1,0 +1,14 @@
+{
+  "name": "payments",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/payments/src",
+  "projectType": "application",
+  "tags": ["scope:payments", "type:app"],
+  "targets": {
+    "build": {},
+    "serve": {},
+    "test": {},
+    "lint": {},
+    "e2e": {}
+  }
+}

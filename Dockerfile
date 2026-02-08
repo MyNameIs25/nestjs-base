@@ -9,6 +9,8 @@ COPY pnpm-lock.yaml ./
 COPY pnpm-workspace.yaml ./
 COPY tsconfig.json tsconfig.json
 COPY nest-cli.json nest-cli.json
+COPY nx.json nx.json
+COPY jest.preset.js jest.preset.js
 
 COPY apps/${APP_NAME}/package.json apps/${APP_NAME}/package.json
 
@@ -19,7 +21,7 @@ RUN pnpm install --frozen-lockfile
 COPY apps/${APP_NAME} apps/${APP_NAME}
 COPY libs libs
 
-RUN pnpm run build ${APP_NAME}
+RUN pnpm -w exec nx build ${APP_NAME}
 
 
 FROM node:22-alpine AS production

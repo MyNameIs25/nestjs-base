@@ -1,6 +1,6 @@
 # /create-microservice
 
-Scaffold a new NestJS microservice app in the monorepo. Creates all source files, Docker setup, and updates shared configs.
+Scaffold a new NestJS microservice app in the monorepo. Creates all source files, Docker setup, Nx project config, and updates shared configs.
 
 ## Usage
 
@@ -36,7 +36,7 @@ From the raw `<name>`, derive:
 | `{camelName}`  | `paymentGateway`            | PascalName with lowercased first letter               |
 | `{port}`       | `3001`                      | From step 2                                           |
 
-### 4. Create app files (9 files)
+### 4. Create app files (11 files)
 
 #### `apps/{name}/package.json`
 
@@ -62,6 +62,39 @@ From the raw `<name>`, derive:
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
 }
+```
+
+#### `apps/{name}/project.json`
+
+```json
+{
+  "name": "{name}",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/{name}/src",
+  "projectType": "application",
+  "tags": ["scope:{name}", "type:app"],
+  "targets": {
+    "build": {},
+    "serve": {},
+    "test": {},
+    "lint": {},
+    "e2e": {}
+  }
+}
+```
+
+#### `apps/{name}/jest.config.ts`
+
+```typescript
+export default {
+  displayName: '{name}',
+  preset: '../../jest.preset.js',
+  testMatch: ['<rootDir>/src/**/*.spec.ts'],
+  moduleNameMapper: {
+    '^@app/common(|/.*)$': '<rootDir>/../../libs/common/src/$1',
+  },
+  coverageDirectory: '../../coverage/apps/{name}',
+};
 ```
 
 #### `apps/{name}/src/main.ts`
@@ -245,7 +278,18 @@ Append a new include block:
     env_file: docker/{name}/.env.docker
 ```
 
-No changes to `package.json` are needed — the existing root scripts (`build`, `start:dev`, `start:debug`) accept the app name as an argument via the NestJS CLI (e.g. `nest build {name}`).
+#### `eslint.config.mjs`
+
+If the new app needs its own scope boundary, add a depConstraint entry inside the `@nx/enforce-module-boundaries` rule:
+
+```js
+{
+  sourceTag: 'scope:{name}',
+  onlyDependOnLibsWithTags: ['scope:shared', 'scope:{name}'],
+},
+```
+
+No changes to `package.json` are needed — the existing root scripts use Nx `run-many` and pick up new projects automatically.
 
 ### 7. Install and verify
 
@@ -264,9 +308,8 @@ Scaffolded {name} microservice:
   - Port:        {port}
 
 Next steps:
-  nest build {name}                                    # Build
-  nest start {name} --watch                            # Dev server with watch
-  npx jest --testPathPatterns='{name}'                   # Unit tests
-  jest --config apps/{name}/test/jest-e2e.json         # E2E tests
-  make up                                              # Start all services in Docker
+  pnpm serve {name}                        # Dev server with watch
+  pnpm test                                # Unit tests
+  pnpm test:e2e                            # E2E tests
+  make up                                  # Start all services in Docker
 ```
