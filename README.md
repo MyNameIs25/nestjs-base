@@ -1,98 +1,176 @@
 <p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+  <a href="README.md">English</a> |
+  <a href="docs/README.zh-CN.md">简体中文</a> |
+  <a href="docs/README.ja.md">日本語</a>
 </p>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+# NestJS Monorepo
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+NestJS monorepo setup branched out from initialization branch.
+Multiple apps share common libraries for comparing different library
+implementations (logging, error handling, config, etc.).
 
-## Description
+## Project Structure
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
-```bash
-$ pnpm install
+```text
+├── apps/
+│   └── auth/                       # Auth microservice
+│       ├── src/
+│       │   ├── main.ts             # Bootstrap entry point
+│       │   ├── auth.module.ts      # Root module
+│       │   ├── auth.controller.ts
+│       │   └── auth.service.ts
+│       ├── test/                   # E2E tests
+│       ├── package.json            # App-level dependencies
+│       └── tsconfig.app.json
+├── libs/
+│   └── common/                     # Shared library (@app/common)
+│       ├── src/
+│       │   ├── index.ts            # Public API barrel file
+│       │   ├── common.module.ts
+│       │   └── common.service.ts
+│       └── tsconfig.lib.json
+├── docker/
+│   ├── base.yml                    # Shared Docker Compose service template
+│   └── auth/
+│       ├── compose.override.yml    # Auth-specific compose overrides
+│       └── .env.docker             # APP_NAME=auth
+├── docker-compose.yml              # Includes per-app compose files
+├── Dockerfile                      # Multi-stage build (development + production)
+├── Makefile                        # Docker convenience commands
+├── nest-cli.json                   # Monorepo project definitions
+├── pnpm-workspace.yaml             # Workspace definitions
+└── tsconfig.json                   # Root TS config with path aliases
 ```
 
-## Compile and run the project
+## Monorepo Design
 
-```bash
-# development
-$ pnpm run start
+This project uses a **NestJS monorepo** with **pnpm workspaces** for dependency management.
 
-# watch mode
-$ pnpm run start:dev
+### How It Works
 
-# production mode
-$ pnpm run start:prod
+- **`nest-cli.json`** registers all apps and libraries with `"monorepo": true`. The NestJS CLI uses this to build, serve, and generate code for the correct project.
+- **`pnpm-workspace.yaml`** declares `apps/*` as workspace packages, giving each app its own `package.json` for dependency isolation.
+- **`tsconfig.json`** defines path aliases (e.g., `@app/common`) so any app can import shared libraries without relative paths.
+- Each app has its own `main.ts` entry point, root module, and build config. Apps are independently buildable and deployable.
+- Libraries (`libs/`) contain shared code referenced via path aliases and bundled into each app at build time — they are not published as separate packages.
+
+### Pros
+
+- **Shared code without duplication** — Common utilities, modules, and types live in `libs/` and are imported by any app via `@app/common`.
+- **Atomic changes** — A single commit can update a shared library and all apps that use it, avoiding version drift.
+- **Unified tooling** — One set of ESLint, Prettier, TypeScript, and Jest configs for the entire codebase.
+- **Simple dependency management** — pnpm workspaces hoist shared dependencies, reducing disk usage and install time.
+- **Independent deployability** — Each app builds to its own `dist/` and can be deployed separately.
+
+### Cons
+
+- **Build coupling** — Changing a shared library requires rebuilding every app that depends on it. CI pipelines need to be aware of dependency graphs.
+- **Scaling limits** — As the number of apps grows, install and build times increase. Large monorepos may need tools like Nx or Turborepo for incremental builds.
+- **Shared dependency versions** — All apps share the same version of root-level dependencies. Upgrading a package (e.g., NestJS) affects everything at once.
+- **IDE performance** — Large monorepos with many projects can slow down TypeScript language server and file indexing.
+
+## Docker Design
+
+The Docker setup uses a **single parameterized Dockerfile** and a **composable Docker Compose structure** that scales with the number of microservices.
+
+### Dockerfile
+
+A 2-stage multi-stage build parameterized by `APP_NAME`:
+
+| Stage | Purpose |
+| --- | --- |
+| **development** | Installs all deps, copies source, runs `pnpm run build`. Used with compose for dev with hot reload. |
+| **production** | Installs prod deps only, copies built `dist/` from development stage. Runs `node dist/apps/<APP_NAME>/main`. |
+
+The same Dockerfile builds any app — just pass a different `APP_NAME` build arg.
+
+### Docker Compose
+
+The compose setup separates shared configuration from per-app overrides:
+
+```text
+docker-compose.yml              ← includes per-app compose files
+docker/
+  base.yml                      ← shared service template (build, env, volumes, command)
+  auth/
+    compose.override.yml        ← app-specific overrides (service name, port)
+    .env.docker                 ← APP_NAME=auth
 ```
 
-## Run tests
+- **`docker/base.yml`** — Defines a reusable service template with `${APP_NAME}` interpolation. Handles build context, build args, container naming, the dev command (`pnpm run start:dev`), environment variables, and source volume mounts for hot reload.
+- **`docker/<app>/compose.override.yml`** — Only contains what's unique to each app: the service name and port mapping. Everything else is inherited via `extends`.
+- **`docker-compose.yml`** — Uses `include` to pull in each app's compose file, with `project_directory: .` for path resolution from the project root and `env_file` to inject the `APP_NAME` variable.
+
+### Makefile
+
+| Command | Description |
+| --- | --- |
+| `make build` | Build all Docker images |
+| `make up` | Start all containers in detached mode |
+| `make down` | Stop and remove all containers |
+| `make logs` | Interactive service selector — lists running containers and tails logs for your selection |
+
+## Adding a New Microservice
+
+### 1. Generate the NestJS app
 
 ```bash
-# unit tests
-$ pnpm run test
-
-# e2e tests
-$ pnpm run test:e2e
-
-# test coverage
-$ pnpm run test:cov
+nest generate app <app-name>
 ```
 
-## Deployment
+This creates `apps/<app-name>/` with source files, `tsconfig.app.json`, and registers the project in `nest-cli.json`.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### 2. Create the Docker config
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+mkdir docker/<app-name>
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Create `docker/<app-name>/.env.docker`:
 
-## Resources
+```text
+APP_NAME=<app-name>
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+Create `docker/<app-name>/compose.override.yml`:
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```yaml
+services:
+  <app-name>:
+    extends:
+      file: docker/base.yml
+      service: app
+    ports:
+      - '<port>:<port>'
+```
 
-## Support
+### 3. Register in Docker Compose
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Add to `docker-compose.yml`:
 
-## Stay in touch
+```yaml
+  - path: docker/<app-name>/compose.override.yml
+    project_directory: .
+    env_file: docker/<app-name>/.env.docker
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+### 4. Build and run
 
-## License
+```bash
+make build && make up
+make logs                # select your new service
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## Development
+
+```bash
+pnpm install                        # Install all dependencies
+pnpm run start:dev                  # Dev server (auth) with watch mode
+pnpm run start:dev <app-name>       # Dev server for a specific app
+pnpm run lint                       # ESLint with auto-fix
+pnpm run format                     # Prettier
+pnpm run test                       # Unit tests
+pnpm run test:e2e                   # E2E tests
+pnpm run test:cov                   # Test coverage
+```

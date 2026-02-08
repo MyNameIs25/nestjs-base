@@ -1,0 +1,7 @@
+services:
+  auth:
+    extends:
+      file: docker/base.yml
+      service: app
+    ports:
+      - '3000:3000'

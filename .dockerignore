@@ -1,0 +1,11 @@
+node_modules
+volumes
+dist
+.git
+.husky
+.claude
+coverage
+.env*
+*.md
+.idea
+.vscode

@@ -1,7 +1,7 @@
 ---
 paths:
-  - src/**/*.controller.ts
-  - src/**/*.dto.ts
+  - apps/**/src/**/*.controller.ts
+  - apps/**/src/**/*.dto.ts
 ---
 
 # API Conventions

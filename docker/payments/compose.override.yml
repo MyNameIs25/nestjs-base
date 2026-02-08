@@ -1,0 +1,7 @@
+services:
+  payments:
+    extends:
+      file: docker/base.yml
+      service: app
+    ports:
+      - '3001:3001'

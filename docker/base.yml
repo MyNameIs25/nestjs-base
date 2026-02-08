@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: ..
+      target: development
+      args:
+        APP_NAME: ${APP_NAME}
+    container_name: ${APP_NAME}
+    command: pnpm run start:dev ${APP_NAME}
+    depends_on:
+      - postgres
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ${PWD}/apps/${APP_NAME}/src:/usr/src/app/apps/${APP_NAME}/src
+      - ${PWD}/libs/common/src:/usr/src/app/libs/common/src
