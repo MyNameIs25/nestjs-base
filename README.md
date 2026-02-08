@@ -1,7 +1,14 @@
+<p align="center">
+  <a href="README.md">English</a> |
+  <a href="docs/README.zh-CN.md">简体中文</a> |
+  <a href="docs/README.ja.md">日本語</a>
+</p>
+
 # NestJS Monorepo
 
 NestJS monorepo setup branched out from initialization branch.
-Multiple apps share common libraries for comparing different library implementations (logging, error handling, config, etc.).
+Multiple apps share common libraries for comparing different library
+implementations (logging, error handling, config, etc.).
 
 ## Project Structure
 
