@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { appConfig } from '@app/common';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 
@@ -8,15 +9,21 @@ describe('PaymentsController', () => {
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({
       controllers: [PaymentsController],
-      providers: [PaymentsService],
+      providers: [
+        PaymentsService,
+        {
+          provide: appConfig.KEY,
+          useValue: { nodeEnv: 'test', serviceName: 'payments' },
+        },
+      ],
     }).compile();
 
     paymentsController = app.get<PaymentsController>(PaymentsController);
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(paymentsController.getHello()).toBe('Hello World!');
+    it('should return greeting with service name', () => {
+      expect(paymentsController.getHello()).toBe('Hello from payments!');
     });
   });
 });

@@ -81,6 +81,15 @@ NestJS monorepo (`nest-cli.json` with `monorepo: true`) using pnpm workspaces fo
   - `libs/common/src/common.module.ts` + `common.service.ts` — Shared module/service
   - `libs/common/project.json` — Nx project config and targets
 
+#### Config Module (`libs/common/src/config/`)
+
+- `config.module.ts` — `AppConfigModule.forRoot({ namespaces })` wraps `@nestjs/config` with Zod validation, always loads base `appConfig` (NODE_ENV, SERVICE_NAME).
+- `factories/namespaced-config.factory.ts` — `createNamespacedConfig({ key, schema, map })` creates a validated, namespace-scoped config factory (exposes `.KEY` injection token for `@Inject()`)
+- `schemas/base.schema.ts` — Base `appConfig` factory + `AppConfig` type
+- `types/config.type.ts` — `NamespaceFactory`, `AppConfigOptions` types
+
+Apps create a `{PascalName}ConfigService` using `@Inject(factory.KEY)` for each namespace and register it as a provider in the app module. See `apps/auth/src/config/` for reference and `.claude/rules/config.md` for detailed patterns.
+
 ### Configuration
 
 - `nx.json` — Nx workspace config (caching, task pipeline, named inputs)

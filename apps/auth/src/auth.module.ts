@@ -1,10 +1,17 @@
 import { Module } from '@nestjs/common';
+import { AppConfigModule } from '@app/common';
+import { AuthConfigService } from './config';
+import { databaseConfig } from './config/schemas/database.config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 
 @Module({
-  imports: [],
+  imports: [
+    AppConfigModule.forRoot({
+      namespaces: [databaseConfig],
+    }),
+  ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthConfigService, AuthService],
 })
 export class AuthModule {}
