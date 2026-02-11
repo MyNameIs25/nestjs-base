@@ -11,7 +11,6 @@ const databaseSchema = z.object({
 export const databaseConfig = createNamespacedConfig({
   key: 'database',
   schema: databaseSchema,
-  map: { host: 'DB_HOST', port: 'DB_PORT', name: 'DB_NAME' },
 });
 
 export type DatabaseConfig = ConfigType<typeof databaseConfig>;

@@ -6,6 +6,6 @@ export class AuthService {
   constructor(private readonly config: AuthConfigService) {}
 
   getHello(): string {
-    return `Hello from ${this.config.app.serviceName}!`;
+    return `Hello from ${this.config.app.SERVICE_NAME}!`;
   }
 }

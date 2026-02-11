@@ -88,14 +88,14 @@ The config module (`libs/common/src/config/`) wraps `@nestjs/config` with **Zod 
 
 ### How It Works
 
-- **`createNamespacedConfig({ key, schema, map })`** creates a config factory that validates `process.env` against a Zod schema at startup. It returns a factory with a `.KEY` injection token for `@Inject()`. The `map` parameter renames env vars to friendlier property names (e.g., `DB_HOST` → `host`).
+- **`createNamespacedConfig({ key, schema })`** creates a config factory that validates `process.env` against a Zod schema at startup. It returns a factory with a `.KEY` injection token for `@Inject()`. The factory returns `z.infer<TSchema>` directly — property names match env var names (e.g., `config.database.DB_HOST`).
 - **`AppConfigModule.forRoot({ namespaces })`** wraps `ConfigModule.forRoot()`. It always loads the base `appConfig` (NODE_ENV, SERVICE_NAME) and merges additional namespace factories passed via `namespaces[]`. Sets `isGlobal: true` and `cache: true`.
-- **App-level config services** (e.g., `AuthConfigService`) use `@Inject(factory.KEY)` to receive validated, mapped config objects as constructor parameters. They are registered as regular providers in the app module.
+- **App-level config services** (e.g., `AuthConfigService`) use `@Inject(factory.KEY)` to receive validated config objects as constructor parameters. They are registered as regular providers in the app module.
 
 ### Flow
 
 ```text
-.env → Zod schema validates process.env → map renames keys → @Inject(factory.KEY) delivers config
+.env → Zod schema validates process.env → @Inject(factory.KEY) delivers config
 ```
 
 ### Example
@@ -112,7 +112,6 @@ const databaseSchema = z.object({
 export const databaseConfig = createNamespacedConfig({
   key: 'database',
   schema: databaseSchema,
-  map: { host: 'DB_HOST', port: 'DB_PORT', name: 'DB_NAME' },
 });
 ```
 
@@ -141,16 +140,16 @@ export class AuthModule {}
 ### Pros
 
 - **Fail-fast validation** — Invalid or missing env vars throw at startup with clear error messages including the namespace name, not silently at runtime.
-- **Type-safe config** — `ConfigType<typeof factory>` infers the exact shape, so `config.database.host` is typed as `string` without manual interfaces.
+- **Type-safe config** — `ConfigType<typeof factory>` infers the exact shape, so `config.database.DB_HOST` is typed as `string` without manual interfaces.
 - **Clean DI** — `@Inject(factory.KEY)` uses NestJS's native DI. No wrapper classes or abstract base classes needed.
-- **Env var renaming** — The `map` parameter decouples property names from env var names (`DB_HOST` → `host`), keeping application code clean.
+- **Minimal boilerplate** — Only `key` and `schema` needed to define a namespace. No mapping layer between env var names and property names.
 - **Namespace isolation** — Each namespace is independently validated and injected. Adding a new namespace doesn't affect existing ones.
 
 ### Cons
 
 - **Indirection layer** — `createNamespacedConfig` adds abstraction over `@nestjs/config`'s `registerAs`. Developers need to understand both the wrapper and the underlying library.
 - **Dual registration** — Namespaces must be listed in both the module's `forRoot({ namespaces })` and the config service's `@Inject()`. There's no auto-extraction since config factories must be registered at module initialization time (before DI).
-- **Map boilerplate** — Each namespace requires defining the schema, the map, and the type export. For simple configs this is more ceremony than plain `ConfigService.get()`.
+- **Env var names in code** — Property names match env var names (e.g., `config.database.DB_HOST`), which may feel less idiomatic than camelCase properties.
 
 ## Docker Design
 

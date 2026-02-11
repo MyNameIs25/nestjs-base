@@ -6,6 +6,6 @@ export class PaymentsService {
   constructor(@Inject(appConfig.KEY) private readonly app: AppConfig) {}
 
   getHello(): string {
-    return `Hello from ${this.app.serviceName}!`;
+    return `Hello from ${this.app.SERVICE_NAME}!`;
   }
 }

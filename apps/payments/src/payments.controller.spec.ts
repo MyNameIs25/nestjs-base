@@ -13,7 +13,7 @@ describe('PaymentsController', () => {
         PaymentsService,
         {
           provide: appConfig.KEY,
-          useValue: { nodeEnv: 'test', serviceName: 'payments' },
+          useValue: { NODE_ENV: 'test', SERVICE_NAME: 'payments' },
         },
       ],
     }).compile();

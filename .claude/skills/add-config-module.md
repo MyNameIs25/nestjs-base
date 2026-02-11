@@ -28,7 +28,6 @@ For each namespace, collect:
 |-------|-------------|---------|
 | Namespace key | Unique config key | `database` |
 | Env vars | Environment variable names + Zod type | `DB_HOST: z.string()`, `DB_PORT: z.coerce.number()` |
-| Property map | Mapped property names → env var names | `host → DB_HOST`, `port → DB_PORT` |
 
 ### 3. Derive names
 
@@ -56,7 +55,6 @@ const {namespace}Schema = z.object({
 export const {namespace}Config = createNamespacedConfig({
   key: '{namespace}',
   schema: {namespace}Schema,
-  map: { /* property: 'ENV_VAR' from step 2 */ },
 });
 
 export type {PascalNamespace}Config = ConfigType<typeof {namespace}Config>;
@@ -129,7 +127,7 @@ export class {PascalName}Service {
   constructor(private readonly config: {PascalName}ConfigService) {}
 
   getHello(): string {
-    return `Hello from ${this.config.app.serviceName}!`;
+    return `Hello from ${this.config.app.SERVICE_NAME}!`;
   }
 }
 ```
@@ -155,9 +153,9 @@ describe('{PascalName}Controller', () => {
         {
           provide: {PascalName}ConfigService,
           useValue: {
-            app: { nodeEnv: 'test', serviceName: '{name}' },
-            // one property per namespace with realistic defaults
-            {namespaceProperty}: { /* mapped properties with test defaults */ },
+            app: { NODE_ENV: 'test', SERVICE_NAME: '{name}' },
+            // one property per namespace with env var names as keys
+            {namespaceProperty}: { /* env var properties with test defaults */ },
           },
         },
       ],
@@ -205,7 +203,7 @@ Added config module to {name}:
   - Namespaces:     {namespace1}, {namespace2}, ...
 
 The {PascalName}ConfigService is now injected across the app.
-Access config via: this.config.app.*, this.config.{namespaceProperty}.*
+Access config via: this.config.app.SERVICE_NAME, this.config.{namespaceProperty}.DB_HOST, etc.
 ```
 
 ## Reference implementation

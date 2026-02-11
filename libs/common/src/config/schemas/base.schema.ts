@@ -12,7 +12,6 @@ const appSchema = z.object({
 export const appConfig = createNamespacedConfig({
   key: 'app',
   schema: appSchema,
-  map: { nodeEnv: 'NODE_ENV', serviceName: 'SERVICE_NAME' },
 });
 
 export type AppConfig = ConfigType<typeof appConfig>;

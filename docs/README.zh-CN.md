@@ -88,14 +88,14 @@
 
 ### 工作原理
 
-- **`createNamespacedConfig({ key, schema, map })`** 创建一个配置工厂，在启动时使用 Zod schema 校验 `process.env`。返回带有 `.KEY` 注入令牌的工厂，用于 `@Inject()`。`map` 参数将环境变量重命名为更友好的属性名（例如 `DB_HOST` → `host`）。
+- **`createNamespacedConfig({ key, schema })`** 创建一个配置工厂，在启动时使用 Zod schema 校验 `process.env`。返回带有 `.KEY` 注入令牌的工厂，用于 `@Inject()`。工厂直接返回 `z.infer<TSchema>` — 属性名与环境变量名一致（例如 `config.database.DB_HOST`）。
 - **`AppConfigModule.forRoot({ namespaces })`** 封装 `ConfigModule.forRoot()`。始终加载基础 `appConfig`（NODE_ENV, SERVICE_NAME），并合并通过 `namespaces[]` 传入的额外命名空间工厂。设置 `isGlobal: true` 和 `cache: true`。
-- **应用级配置服务**（例如 `AuthConfigService`）使用 `@Inject(factory.KEY)` 在构造函数中接收经过校验和映射的配置对象。它们作为普通 provider 注册在应用模块中。
+- **应用级配置服务**（例如 `AuthConfigService`）使用 `@Inject(factory.KEY)` 在构造函数中接收经过校验的配置对象。它们作为普通 provider 注册在应用模块中。
 
 ### 流程
 
 ```text
-.env → Zod schema 校验 process.env → map 重命名键 → @Inject(factory.KEY) 注入配置
+.env → Zod schema 校验 process.env → @Inject(factory.KEY) 注入配置
 ```
 
 ### 示例
@@ -112,7 +112,6 @@ const databaseSchema = z.object({
 export const databaseConfig = createNamespacedConfig({
   key: 'database',
   schema: databaseSchema,
-  map: { host: 'DB_HOST', port: 'DB_PORT', name: 'DB_NAME' },
 });
 ```
 
@@ -141,16 +140,16 @@ export class AuthModule {}
 ### 优点
 
 - **启动时快速失败** — 无效或缺失的环境变量在启动时抛出带命名空间名称的清晰错误信息，而非在运行时静默失败。
-- **类型安全配置** — `ConfigType<typeof factory>` 推断出精确的类型结构，`config.database.host` 被推断为 `string`，无需手动编写接口。
+- **类型安全配置** — `ConfigType<typeof factory>` 推断出精确的类型结构，`config.database.DB_HOST` 被推断为 `string`，无需手动编写接口。
 - **简洁的 DI** — `@Inject(factory.KEY)` 使用 NestJS 原生 DI，无需封装类或抽象基类。
-- **环境变量重命名** — `map` 参数将属性名与环境变量名解耦（`DB_HOST` → `host`），保持应用代码整洁。
+- **最少样板代码** — 只需 `key` 和 `schema` 即可定义命名空间，无需在环境变量名和属性名之间建立映射层。
 - **命名空间隔离** — 每个命名空间独立校验和注入，添加新命名空间不影响现有命名空间。
 
 ### 缺点
 
 - **间接层** — `createNamespacedConfig` 在 `@nestjs/config` 的 `registerAs` 之上增加了抽象层。开发者需要同时理解封装层和底层库。
 - **双重注册** — 命名空间需要同时在模块的 `forRoot({ namespaces })` 和配置服务的 `@Inject()` 中声明。由于配置工厂必须在模块初始化阶段（DI 之前）注册，因此无法自动提取。
-- **映射样板代码** — 每个命名空间都需要定义 schema、map 和类型导出。对于简单配置，这比直接使用 `ConfigService.get()` 更繁琐。
+- **代码中使用环境变量名** — 属性名与环境变量名一致（例如 `config.database.DB_HOST`），可能不如驼峰命名属性那么符合惯例。
 
 ## Docker 设计
 

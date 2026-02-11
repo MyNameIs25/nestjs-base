@@ -12,17 +12,18 @@ globs:
 Factory that wraps `@nestjs/config` `registerAs` with Zod validation:
 
 ```typescript
-createNamespacedConfig({ key, schema, map })
+createNamespacedConfig({ key, schema })
 ```
 
 | Param | Type | Description |
 |-------|------|-------------|
 | `key` | `string` | Namespace key (e.g. `'database'`). Used as injection token via `factory.KEY` |
 | `schema` | `z.ZodObject` | Zod schema validating `process.env` |
-| `map` | `Record<string, keyof z.infer<schema>>` | Maps friendly property names to env var keys |
 
 Returns a factory with:
 - `.KEY` — injection token (`CONFIGURATION(database)`) for `@Inject()`
+
+The factory returns `z.infer<TSchema>` directly — property names match env var names (e.g. `config.database.DB_HOST`).
 
 ## `AppConfigModule.forRoot()` (libs/common)
 
@@ -63,6 +64,7 @@ export class AuthConfigService {
 
 - Use `@Inject(factory.KEY)` for each namespace — type-safe, no boilerplate
 - Always include `appConfig` for NODE_ENV, SERVICE_NAME
+- Access env vars by their original names: `this.app.SERVICE_NAME`, `this.database.DB_HOST`
 
 ### Config Module
 
@@ -124,7 +126,6 @@ const databaseSchema = z.object({
 export const databaseConfig = createNamespacedConfig({
   key: 'database',
   schema: databaseSchema,
-  map: { host: 'DB_HOST', port: 'DB_PORT', name: 'DB_NAME' },
 });
 
 export type DatabaseConfig = ConfigType<typeof databaseConfig>;
@@ -138,8 +139,8 @@ Mock `{PascalName}ConfigService` with `useValue` — do not import config module
 {
   provide: AuthConfigService,
   useValue: {
-    app: { nodeEnv: 'test', serviceName: 'auth' },
-    database: { host: 'localhost', port: 5432, name: 'auth_db' },
+    app: { NODE_ENV: 'test', SERVICE_NAME: 'auth' },
+    database: { DB_HOST: 'localhost', DB_PORT: 5432, DB_NAME: 'auth_db' },
   },
 }
 ```
