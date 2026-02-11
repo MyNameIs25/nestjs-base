@@ -8,9 +8,8 @@
 
 # NestJS Monorepo
 
-NestJS monorepo setup with **Nx** for build orchestration, branched out from **1/monorepo-setup**.
-Multiple apps share common libraries for comparing different library
-implementations (logging, error handling, config, etc.).
+NestJS monorepo setup with **Nx** for build orchestration, branched out from **2/setup-nx-for-monorepo**.
+Adds a **config module** (`@app/common`) that wraps `@nestjs/config` with Zod validation and namespaced config factories.
 
 ## Project Structure
 
@@ -82,6 +81,76 @@ This project uses a **NestJS monorepo** with **pnpm workspaces** for dependency 
 - **Scaling limits** — As the number of apps grows, install and build times increase. Nx computation caching and task graph orchestration address this by skipping unchanged work.
 - **Shared dependency versions** — All apps share the same version of root-level dependencies. Upgrading a package (e.g., NestJS) affects everything at once.
 - **IDE performance** — Large monorepos with many projects can slow down TypeScript language server and file indexing.
+
+## Config Module Design
+
+The config module (`libs/common/src/config/`) wraps `@nestjs/config` with **Zod validation** and a **namespaced factory pattern**, so each config namespace is validated at startup and injected via NestJS DI.
+
+### How It Works
+
+- **`createNamespacedConfig({ key, schema, map })`** creates a config factory that validates `process.env` against a Zod schema at startup. It returns a factory with a `.KEY` injection token for `@Inject()`. The `map` parameter renames env vars to friendlier property names (e.g., `DB_HOST` → `host`).
+- **`AppConfigModule.forRoot({ namespaces })`** wraps `ConfigModule.forRoot()`. It always loads the base `appConfig` (NODE_ENV, SERVICE_NAME) and merges additional namespace factories passed via `namespaces[]`. Sets `isGlobal: true` and `cache: true`.
+- **App-level config services** (e.g., `AuthConfigService`) use `@Inject(factory.KEY)` to receive validated, mapped config objects as constructor parameters. They are registered as regular providers in the app module.
+
+### Flow
+
+```text
+.env → Zod schema validates process.env → map renames keys → @Inject(factory.KEY) delivers config
+```
+
+### Example
+
+Schema file (`apps/auth/src/config/schemas/database.config.ts`):
+
+```typescript
+const databaseSchema = z.object({
+  DB_HOST: z.string(),
+  DB_PORT: z.coerce.number(),
+  DB_NAME: z.string(),
+});
+
+export const databaseConfig = createNamespacedConfig({
+  key: 'database',
+  schema: databaseSchema,
+  map: { host: 'DB_HOST', port: 'DB_PORT', name: 'DB_NAME' },
+});
+```
+
+Config service (`apps/auth/src/config/config.service.ts`):
+
+```typescript
+@Injectable()
+export class AuthConfigService {
+  constructor(
+    @Inject(appConfig.KEY) readonly app: AppConfig,
+    @Inject(databaseConfig.KEY) readonly database: DatabaseConfig,
+  ) {}
+}
+```
+
+App module registers namespaces and the config service as a provider:
+
+```typescript
+@Module({
+  imports: [AppConfigModule.forRoot({ namespaces: [databaseConfig] })],
+  providers: [AuthConfigService, AuthService],
+})
+export class AuthModule {}
+```
+
+### Pros
+
+- **Fail-fast validation** — Invalid or missing env vars throw at startup with clear error messages including the namespace name, not silently at runtime.
+- **Type-safe config** — `ConfigType<typeof factory>` infers the exact shape, so `config.database.host` is typed as `string` without manual interfaces.
+- **Clean DI** — `@Inject(factory.KEY)` uses NestJS's native DI. No wrapper classes or abstract base classes needed.
+- **Env var renaming** — The `map` parameter decouples property names from env var names (`DB_HOST` → `host`), keeping application code clean.
+- **Namespace isolation** — Each namespace is independently validated and injected. Adding a new namespace doesn't affect existing ones.
+
+### Cons
+
+- **Indirection layer** — `createNamespacedConfig` adds abstraction over `@nestjs/config`'s `registerAs`. Developers need to understand both the wrapper and the underlying library.
+- **Dual registration** — Namespaces must be listed in both the module's `forRoot({ namespaces })` and the config service's `@Inject()`. There's no auto-extraction since config factories must be registered at module initialization time (before DI).
+- **Map boilerplate** — Each namespace requires defining the schema, the map, and the type export. For simple configs this is more ceremony than plain `ConfigService.get()`.
 
 ## Docker Design
 

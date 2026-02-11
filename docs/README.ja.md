@@ -8,8 +8,8 @@
 
 # NestJS Monorepo
 
-**Nx** をビルドオーケストレーションに使用し、**1/monorepo-setup** から派生した NestJS monorepo プロジェクトです。
-複数のアプリが共通ライブラリを共有し、さまざまなライブラリ実装（ロギング、エラーハンドリング、設定など）を比較します。
+**Nx** をビルドオーケストレーションに使用し、**2/setup-nx-for-monorepo** から派生した NestJS monorepo プロジェクトです。
+**設定モジュール**（`@app/common`）を追加し、`@nestjs/config` を Zod バリデーションと名前空間化された設定ファクトリーでラップします。
 
 ## プロジェクト構成
 
@@ -81,6 +81,76 @@
 - **スケーラビリティの制限** — アプリ数の増加に伴い、インストールとビルドの時間も増加します。Nx の計算キャッシュとタスクグラフオーケストレーションにより、未変更の作業をスキップすることで対処します。
 - **依存関係バージョンの共有** — すべてのアプリがルートレベルの依存関係の同じバージョンを共有します。パッケージ（例：NestJS）のアップグレードはすべてに影響します。
 - **IDE パフォーマンス** — 多くのプロジェクトを含む大規模な monorepo は TypeScript 言語サーバーやファイルインデックスを遅くする可能性があります。
+
+## 設定モジュール設計
+
+設定モジュール（`libs/common/src/config/`）は `@nestjs/config` を **Zod バリデーション**と**名前空間ファクトリーパターン**でラップし、各設定名前空間が起動時にバリデーションされ、NestJS DI 経由で注入されるようにします。
+
+### 仕組み
+
+- **`createNamespacedConfig({ key, schema, map })`** は、起動時に Zod スキーマで `process.env` をバリデーションする設定ファクトリーを作成します。`@Inject()` 用の `.KEY` インジェクショントークンを持つファクトリーを返します。`map` パラメータは環境変数をより扱いやすいプロパティ名にリネームします（例：`DB_HOST` → `host`）。
+- **`AppConfigModule.forRoot({ namespaces })`** は `ConfigModule.forRoot()` をラップします。常にベースの `appConfig`（NODE_ENV、SERVICE_NAME）を読み込み、`namespaces[]` で渡された追加の名前空間ファクトリーをマージします。`isGlobal: true` と `cache: true` を設定します。
+- **アプリレベルの設定サービス**（例：`AuthConfigService`）は `@Inject(factory.KEY)` を使用して、バリデーション済みでマッピングされた設定オブジェクトをコンストラクタパラメータとして受け取ります。アプリモジュールの通常のプロバイダーとして登録されます。
+
+### フロー
+
+```text
+.env → Zod スキーマが process.env をバリデーション → map がキーをリネーム → @Inject(factory.KEY) が設定を注入
+```
+
+### 例
+
+スキーマファイル（`apps/auth/src/config/schemas/database.config.ts`）：
+
+```typescript
+const databaseSchema = z.object({
+  DB_HOST: z.string(),
+  DB_PORT: z.coerce.number(),
+  DB_NAME: z.string(),
+});
+
+export const databaseConfig = createNamespacedConfig({
+  key: 'database',
+  schema: databaseSchema,
+  map: { host: 'DB_HOST', port: 'DB_PORT', name: 'DB_NAME' },
+});
+```
+
+設定サービス（`apps/auth/src/config/config.service.ts`）：
+
+```typescript
+@Injectable()
+export class AuthConfigService {
+  constructor(
+    @Inject(appConfig.KEY) readonly app: AppConfig,
+    @Inject(databaseConfig.KEY) readonly database: DatabaseConfig,
+  ) {}
+}
+```
+
+アプリモジュールは名前空間を登録し、設定サービスをプロバイダーとして追加します：
+
+```typescript
+@Module({
+  imports: [AppConfigModule.forRoot({ namespaces: [databaseConfig] })],
+  providers: [AuthConfigService, AuthService],
+})
+export class AuthModule {}
+```
+
+### メリット
+
+- **起動時のフェイルファスト** — 無効または不足している環境変数は、名前空間名を含む明確なエラーメッセージとともに起動時にスローされ、実行時にサイレントに失敗しません。
+- **型安全な設定** — `ConfigType<typeof factory>` が正確な型を推論するため、`config.database.host` は手動インターフェースなしで `string` として型付けされます。
+- **クリーンな DI** — `@Inject(factory.KEY)` は NestJS のネイティブ DI を使用します。ラッパークラスや抽象基底クラスは不要です。
+- **環境変数のリネーム** — `map` パラメータがプロパティ名と環境変数名を分離し（`DB_HOST` → `host`）、アプリケーションコードをクリーンに保ちます。
+- **名前空間の分離** — 各名前空間は独立してバリデーション・注入されます。新しい名前空間の追加は既存のものに影響しません。
+
+### デメリット
+
+- **間接層** — `createNamespacedConfig` は `@nestjs/config` の `registerAs` の上に抽象化を追加します。開発者はラッパーと基盤ライブラリの両方を理解する必要があります。
+- **二重登録** — 名前空間はモジュールの `forRoot({ namespaces })` と設定サービスの `@Inject()` の両方に宣言する必要があります。設定ファクトリーはモジュール初期化時（DI 前）に登録される必要があるため、自動抽出はできません。
+- **マッピングのボイラープレート** — 各名前空間にはスキーマ、マップ、型エクスポートの定義が必要です。シンプルな設定の場合、これは `ConfigService.get()` を直接使用するよりも手間がかかります。
 
 ## Docker 設計
 

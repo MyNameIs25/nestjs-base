@@ -8,8 +8,8 @@
 
 # NestJS Monorepo
 
-使用 **Nx** 进行构建编排，从 **1/monorepo-setup** 派生的 NestJS monorepo 项目。
-多个应用共享公共库，用于比较不同库的实现方式（日志、错误处理、配置等）。
+使用 **Nx** 进行构建编排，从 **2/setup-nx-for-monorepo** 派生的 NestJS monorepo 项目。
+新增**配置模块**（`@app/common`），对 `@nestjs/config` 进行封装，提供 Zod 校验和命名空间化的配置工厂。
 
 ## 项目结构
 
@@ -81,6 +81,76 @@
 - **扩展性限制** — 随着应用数量增长，安装和构建时间也会增加。Nx 计算缓存和任务图编排通过跳过未变更的工作来解决这个问题。
 - **共享依赖版本** — 所有应用共享根级依赖的同一版本。升级某个包（例如 NestJS）会同时影响所有应用。
 - **IDE 性能** — 包含大量项目的大型 monorepo 可能会拖慢 TypeScript 语言服务和文件索引。
+
+## 配置模块设计
+
+配置模块（`libs/common/src/config/`）对 `@nestjs/config` 进行封装，提供 **Zod 校验**和**命名空间工厂模式**，使每个配置命名空间在启动时完成校验，并通过 NestJS DI 注入。
+
+### 工作原理
+
+- **`createNamespacedConfig({ key, schema, map })`** 创建一个配置工厂，在启动时使用 Zod schema 校验 `process.env`。返回带有 `.KEY` 注入令牌的工厂，用于 `@Inject()`。`map` 参数将环境变量重命名为更友好的属性名（例如 `DB_HOST` → `host`）。
+- **`AppConfigModule.forRoot({ namespaces })`** 封装 `ConfigModule.forRoot()`。始终加载基础 `appConfig`（NODE_ENV, SERVICE_NAME），并合并通过 `namespaces[]` 传入的额外命名空间工厂。设置 `isGlobal: true` 和 `cache: true`。
+- **应用级配置服务**（例如 `AuthConfigService`）使用 `@Inject(factory.KEY)` 在构造函数中接收经过校验和映射的配置对象。它们作为普通 provider 注册在应用模块中。
+
+### 流程
+
+```text
+.env → Zod schema 校验 process.env → map 重命名键 → @Inject(factory.KEY) 注入配置
+```
+
+### 示例
+
+Schema 文件（`apps/auth/src/config/schemas/database.config.ts`）：
+
+```typescript
+const databaseSchema = z.object({
+  DB_HOST: z.string(),
+  DB_PORT: z.coerce.number(),
+  DB_NAME: z.string(),
+});
+
+export const databaseConfig = createNamespacedConfig({
+  key: 'database',
+  schema: databaseSchema,
+  map: { host: 'DB_HOST', port: 'DB_PORT', name: 'DB_NAME' },
+});
+```
+
+配置服务（`apps/auth/src/config/config.service.ts`）：
+
+```typescript
+@Injectable()
+export class AuthConfigService {
+  constructor(
+    @Inject(appConfig.KEY) readonly app: AppConfig,
+    @Inject(databaseConfig.KEY) readonly database: DatabaseConfig,
+  ) {}
+}
+```
+
+应用模块注册命名空间并将配置服务作为 provider：
+
+```typescript
+@Module({
+  imports: [AppConfigModule.forRoot({ namespaces: [databaseConfig] })],
+  providers: [AuthConfigService, AuthService],
+})
+export class AuthModule {}
+```
+
+### 优点
+
+- **启动时快速失败** — 无效或缺失的环境变量在启动时抛出带命名空间名称的清晰错误信息，而非在运行时静默失败。
+- **类型安全配置** — `ConfigType<typeof factory>` 推断出精确的类型结构，`config.database.host` 被推断为 `string`，无需手动编写接口。
+- **简洁的 DI** — `@Inject(factory.KEY)` 使用 NestJS 原生 DI，无需封装类或抽象基类。
+- **环境变量重命名** — `map` 参数将属性名与环境变量名解耦（`DB_HOST` → `host`），保持应用代码整洁。
+- **命名空间隔离** — 每个命名空间独立校验和注入，添加新命名空间不影响现有命名空间。
+
+### 缺点
+
+- **间接层** — `createNamespacedConfig` 在 `@nestjs/config` 的 `registerAs` 之上增加了抽象层。开发者需要同时理解封装层和底层库。
+- **双重注册** — 命名空间需要同时在模块的 `forRoot({ namespaces })` 和配置服务的 `@Inject()` 中声明。由于配置工厂必须在模块初始化阶段（DI 之前）注册，因此无法自动提取。
+- **映射样板代码** — 每个命名空间都需要定义 schema、map 和类型导出。对于简单配置，这比直接使用 `ConfigService.get()` 更繁琐。
 
 ## Docker 设计
 
