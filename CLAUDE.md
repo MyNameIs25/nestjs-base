@@ -84,7 +84,7 @@ NestJS monorepo (`nest-cli.json` with `monorepo: true`) using pnpm workspaces fo
 #### Config Module (`libs/common/src/config/`)
 
 - `config.module.ts` — `AppConfigModule.forRoot({ namespaces })` wraps `@nestjs/config` with Zod validation, always loads base `appConfig` (NODE_ENV, SERVICE_NAME).
-- `factories/namespaced-config.factory.ts` — `createNamespacedConfig({ key, schema, map })` creates a validated, namespace-scoped config factory (exposes `.KEY` injection token for `@Inject()`)
+- `factories/namespaced-config.factory.ts` — `createNamespacedConfig({ key, schema })` creates a validated, namespace-scoped config factory (exposes `.KEY` injection token for `@Inject()`)
 - `schemas/base.schema.ts` — Base `appConfig` factory + `AppConfig` type
 - `types/config.type.ts` — `NamespaceFactory`, `AppConfigOptions` types
 

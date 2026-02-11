@@ -2,23 +2,13 @@ import { registerAs } from '@nestjs/config';
 import { ConfigFactoryKeyHost } from '@nestjs/config';
 import { z } from 'zod';
 
-export type ObjectMapResult<
-  TSchema extends z.ZodObject<any>,
-  TMap extends Record<string, keyof z.infer<TSchema>>,
-> = {
-  [K in keyof TMap]: z.infer<TSchema>[TMap[K] & keyof z.infer<TSchema>];
-};
-
 export function createNamespacedConfig<
   TSchema extends z.ZodObject<any>,
-  const TMap extends Record<string, keyof z.infer<TSchema>>,
 >(options: {
   key: string;
   schema: TSchema;
-  map: TMap;
-}): (() => ObjectMapResult<TSchema, TMap>) &
-  ConfigFactoryKeyHost<ObjectMapResult<TSchema, TMap>> {
-  const { key, schema, map } = options;
+}): (() => z.infer<TSchema>) & ConfigFactoryKeyHost<z.infer<TSchema>> {
+  const { key, schema } = options;
 
   const factory = registerAs(key, () => {
     const result = schema.safeParse(process.env);
@@ -34,11 +24,7 @@ export function createNamespacedConfig<
       );
     }
 
-    const mapped: Record<string, unknown> = {};
-    for (const [mapKey, envKey] of Object.entries(map)) {
-      mapped[mapKey] = result.data[envKey as string];
-    }
-    return mapped as ObjectMapResult<TSchema, TMap>;
+    return result.data as z.infer<TSchema>;
   });
 
   return factory;

@@ -14,8 +14,12 @@ describe('AuthController', () => {
         {
           provide: AuthConfigService,
           useValue: {
-            app: { nodeEnv: 'test', serviceName: 'auth' },
-            database: { host: 'localhost', port: 5432, name: 'auth_db' },
+            app: { NODE_ENV: 'test', SERVICE_NAME: 'auth' },
+            database: {
+              DB_HOST: 'localhost',
+              DB_PORT: 5432,
+              DB_NAME: 'auth_db',
+            },
           },
         },
       ],
