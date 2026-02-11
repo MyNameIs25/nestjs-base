@@ -88,7 +88,7 @@ NestJS monorepo (`nest-cli.json` with `monorepo: true`) using pnpm workspaces fo
 - `schemas/base.schema.ts` — Base `appConfig` factory + `AppConfig` type
 - `types/config.type.ts` — `NamespaceFactory`, `AppConfigOptions` types
 
-Apps create a `{PascalName}ConfigService` using `@Inject(factory.KEY)` for each namespace and register it as a provider in the app module. See `apps/auth/src/config/` for reference and `.claude/rules/config.md` for detailed patterns.
+Apps encapsulate config in a `{PascalName}ConfigModule` that wraps `AppConfigModule.forRoot()` and provides a `{PascalName}ConfigService`. The app root module simply imports this config module. See `apps/auth/src/config/` for reference and `.claude/rules/config.md` for detailed patterns.
 
 ### Configuration
 

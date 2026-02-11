@@ -40,7 +40,7 @@ AppConfigModule.forRoot({
 
 ## App-Level Config Pattern
 
-Each app creates a `{PascalName}ConfigService` using `@Inject(factory.KEY)` for each namespace. Register it as a provider in the app module.
+Each app encapsulates config concerns in a dedicated `{PascalName}ConfigModule` at `apps/{name}/src/config/config.module.ts`. This module wraps `AppConfigModule.forRoot()` and provides the config service. The app root module simply imports it.
 
 ### Config Service
 
@@ -64,22 +64,47 @@ export class AuthConfigService {
 - Use `@Inject(factory.KEY)` for each namespace — type-safe, no boilerplate
 - Always include `appConfig` for NODE_ENV, SERVICE_NAME
 
-### App Root Module
+### Config Module
 
 ```typescript
+import { Module } from '@nestjs/common';
+import { AuthConfigService } from './config.service';
+import { databaseConfig } from './schemas/database.config';
+import { AppConfigModule } from '@app/common';
+
 @Module({
   imports: [
     AppConfigModule.forRoot({
       namespaces: [databaseConfig],
     }),
   ],
+  providers: [AuthConfigService],
+  exports: [AuthConfigService],
+})
+export class AuthConfigModule {}
+```
+
+- Wraps `AppConfigModule.forRoot()` with the app's namespace factories
+- Provides and exports `{PascalName}ConfigService`
+- Barrel-exported from `apps/{name}/src/config/index.ts`
+
+### App Root Module
+
+```typescript
+import { Module } from '@nestjs/common';
+import { AuthConfigModule } from './config';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+
+@Module({
+  imports: [AuthConfigModule],
   controllers: [AuthController],
-  providers: [AuthConfigService, AuthService],
+  providers: [AuthService],
 })
 export class AuthModule {}
 ```
 
-`AppConfigModule.forRoot()` loads the config factories. The config service is a regular provider in the module.
+The app root module imports `AuthConfigModule` — no direct config wiring needed.
 
 ### Config Schema Files
 
