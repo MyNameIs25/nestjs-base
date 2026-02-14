@@ -90,6 +90,15 @@ NestJS monorepo (`nest-cli.json` with `monorepo: true`) using pnpm workspaces fo
 
 Apps encapsulate config in a `{PascalName}ConfigModule` that wraps `AppConfigModule.forRoot()` and provides a `{PascalName}ConfigService`. The app root module simply imports this config module. See `apps/auth/src/config/` for reference and `.claude/rules/config.md` for detailed patterns.
 
+#### Logger Module (`libs/common/src/logger/`)
+
+- `logger.module.ts` — `AppLoggerModule.forRoot()` / `forRootAsync()` wraps `nestjs-pino`. Global module — `AppLogger` is injectable everywhere.
+- `logger.service.ts` — `AppLogger` implements NestJS `LoggerService`, delegates to Pino
+- `logger.constants.ts` — `LOG_LEVELS`, `DEFAULT_LOG_LEVEL`, `DEFAULT_LOG_RETENTION_DAYS`, `DEFAULT_REDACT_PATHS`
+- `types/logger.type.ts` — `LogLevel`, `AppLoggerOptions`, `AppLoggerAsyncOptions`
+
+The logger reads `process.env` directly (not via ConfigModule) so it's available before config validation runs. See `.claude/rules/logger.md` for detailed patterns.
+
 ### Configuration
 
 - `nx.json` — Nx workspace config (caching, task pipeline, named inputs)

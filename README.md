@@ -8,276 +8,121 @@
 
 # NestJS Monorepo
 
-NestJS monorepo setup with **Nx** for build orchestration, branched out from **2/setup-nx-for-monorepo**.
-Adds a **config module** (`@app/common`) that wraps `@nestjs/config` with Zod validation and namespaced config factories.
-
-## Project Structure
-
-```text
-├── apps/
-│   ├── auth/                       # Auth microservice (default, port 3000)
-│   │   ├── src/
-│   │   │   ├── main.ts             # Bootstrap entry point
-│   │   │   ├── auth.module.ts      # Root module
-│   │   │   ├── auth.controller.ts
-│   │   │   └── auth.service.ts
-│   │   ├── test/                   # E2E tests
-│   │   ├── package.json            # App-level dependencies
-│   │   ├── project.json            # Nx project config
-│   │   ├── jest.config.ts          # Per-project Jest config
-│   │   └── tsconfig.app.json
-│   └── payments/                   # Payments microservice (port 3001)
-├── libs/
-│   └── common/                     # Shared library (@app/common)
-│       ├── src/
-│       │   ├── index.ts            # Public API barrel file
-│       │   ├── common.module.ts
-│       │   └── common.service.ts
-│       ├── project.json            # Nx project config
-│       ├── jest.config.ts          # Per-project Jest config
-│       └── tsconfig.lib.json
-├── docker/
-│   ├── base.yml                    # Shared Docker Compose service template
-│   ├── auth/
-│   │   ├── compose.override.yml    # Auth-specific compose overrides
-│   │   └── .env.docker             # APP_NAME=auth
-│   └── payments/
-│       ├── compose.override.yml    # Payments-specific compose overrides
-│       └── .env.docker             # APP_NAME=payments
-├── docker-compose.yml              # Includes per-app compose files
-├── Dockerfile                      # Multi-stage build (development + production)
-├── Makefile                        # Docker convenience commands
-├── nx.json                         # Nx workspace config (caching, pipelines)
-├── jest.preset.js                  # Shared Jest preset
-├── nest-cli.json                   # Monorepo project definitions
-├── pnpm-workspace.yaml             # Workspace definitions
-└── tsconfig.json                   # Root TS config with path aliases
-```
+NestJS monorepo with **Nx** for build orchestration, **pnpm workspaces** for dependency management, and shared libraries in `libs/common`. Each branch explores a different library integration (config, logging, error handling, etc.).
 
 ## Monorepo Design
 
-This project uses a **NestJS monorepo** with **pnpm workspaces** for dependency management and **Nx** for build orchestration, computation caching, and module boundary enforcement.
-
-### How It Works
-
-- **`nest-cli.json`** registers all apps and libraries with `"monorepo": true`. The NestJS CLI uses this to build, serve, and generate code for the correct project.
-- **`pnpm-workspace.yaml`** declares `apps/*` as workspace packages, giving each app its own `package.json` for dependency isolation.
-- **`tsconfig.json`** defines path aliases (e.g., `@app/common`) so any app can import shared libraries without relative paths.
-- **Nx** orchestrates builds, tests, and linting with computation caching and `affected` commands. Each project has a `project.json` defining its targets and tags.
-- Each app has its own `main.ts` entry point, root module, and build config. Apps are independently buildable and deployable.
-- Libraries (`libs/`) contain shared code referenced via path aliases and bundled into each app at build time — they are not published as separate packages.
+- **`nest-cli.json`** registers apps/libraries with `"monorepo": true`
+- **`pnpm-workspace.yaml`** gives each app its own `package.json` for dependency isolation
+- **`tsconfig.json`** defines path aliases (`@app/common`) for shared imports
+- **Nx** orchestrates builds/tests with computation caching and `affected` commands
+- Libraries in `libs/` are bundled into each app at build time — not published separately
 
 ### Pros
 
-- **Shared code without duplication** — Common utilities, modules, and types live in `libs/` and are imported by any app via `@app/common`.
-- **Atomic changes** — A single commit can update a shared library and all apps that use it, avoiding version drift.
-- **Unified tooling** — One set of ESLint, Prettier, TypeScript, and Jest configs for the entire codebase.
-- **Simple dependency management** — pnpm workspaces hoist shared dependencies, reducing disk usage and install time.
-- **Independent deployability** — Each app builds to its own `dist/` and can be deployed separately.
+- **Shared code** — Common modules live in `libs/` and are imported via `@app/common`
+- **Atomic changes** — A single commit can update a shared library and all consuming apps
+- **Unified tooling** — One set of ESLint, Prettier, TypeScript, and Jest configs
 
 ### Cons
 
-- **Build coupling** — Changing a shared library requires rebuilding every app that depends on it. Nx `affected` commands mitigate this by only rebuilding what changed.
-- **Scaling limits** — As the number of apps grows, install and build times increase. Nx computation caching and task graph orchestration address this by skipping unchanged work.
-- **Shared dependency versions** — All apps share the same version of root-level dependencies. Upgrading a package (e.g., NestJS) affects everything at once.
-- **IDE performance** — Large monorepos with many projects can slow down TypeScript language server and file indexing.
+- **Build coupling** — Changing a shared library rebuilds all dependent apps (mitigated by `nx affected`)
+- **Shared dependency versions** — Upgrading a root-level package affects all apps at once
 
-## Config Module Design
+## Config Module
 
-The config module (`libs/common/src/config/`) wraps `@nestjs/config` with **Zod validation** and a **namespaced factory pattern**, so each config namespace is validated at startup and injected via NestJS DI.
+Wraps `@nestjs/config` with **Zod validation** and **namespaced factories** (`libs/common/src/config/`).
 
-### How It Works
-
-- **`createNamespacedConfig({ key, schema, map })`** creates a config factory that validates `process.env` against a Zod schema at startup. It returns a factory with a `.KEY` injection token for `@Inject()`. The `map` parameter renames env vars to friendlier property names (e.g., `DB_HOST` → `host`).
-- **`AppConfigModule.forRoot({ namespaces })`** wraps `ConfigModule.forRoot()`. It always loads the base `appConfig` (NODE_ENV, SERVICE_NAME) and merges additional namespace factories passed via `namespaces[]`. Sets `isGlobal: true` and `cache: true`.
-- **App-level config services** (e.g., `AuthConfigService`) use `@Inject(factory.KEY)` to receive validated, mapped config objects as constructor parameters. They are registered as regular providers in the app module.
-
-### Flow
-
-```text
-.env → Zod schema validates process.env → map renames keys → @Inject(factory.KEY) delivers config
-```
-
-### Example
-
-Schema file (`apps/auth/src/config/schemas/database.config.ts`):
-
-```typescript
-const databaseSchema = z.object({
-  DB_HOST: z.string(),
-  DB_PORT: z.coerce.number(),
-  DB_NAME: z.string(),
-});
-
-export const databaseConfig = createNamespacedConfig({
-  key: 'database',
-  schema: databaseSchema,
-  map: { host: 'DB_HOST', port: 'DB_PORT', name: 'DB_NAME' },
-});
-```
-
-Config service (`apps/auth/src/config/config.service.ts`):
-
-```typescript
-@Injectable()
-export class AuthConfigService {
-  constructor(
-    @Inject(appConfig.KEY) readonly app: AppConfig,
-    @Inject(databaseConfig.KEY) readonly database: DatabaseConfig,
-  ) {}
-}
-```
-
-App module registers namespaces and the config service as a provider:
-
-```typescript
-@Module({
-  imports: [AppConfigModule.forRoot({ namespaces: [databaseConfig] })],
-  providers: [AuthConfigService, AuthService],
-})
-export class AuthModule {}
-```
+- **`createNamespacedConfig({ key, schema, map })`** — Validates `process.env` against a Zod schema at startup. Returns a factory with `.KEY` for `@Inject()`. The `map` parameter renames env vars to friendlier property names.
+- **`AppConfigModule.forRoot({ namespaces })`** — Always loads base `appConfig` (NODE_ENV, SERVICE_NAME), merges additional namespaces. Global and cached.
+- **App-level config** — Each app wraps this in a `{PascalName}ConfigModule` with a `{PascalName}ConfigService` using `@Inject(factory.KEY)`.
 
 ### Pros
 
-- **Fail-fast validation** — Invalid or missing env vars throw at startup with clear error messages including the namespace name, not silently at runtime.
-- **Type-safe config** — `ConfigType<typeof factory>` infers the exact shape, so `config.database.host` is typed as `string` without manual interfaces.
-- **Clean DI** — `@Inject(factory.KEY)` uses NestJS's native DI. No wrapper classes or abstract base classes needed.
-- **Env var renaming** — The `map` parameter decouples property names from env var names (`DB_HOST` → `host`), keeping application code clean.
-- **Namespace isolation** — Each namespace is independently validated and injected. Adding a new namespace doesn't affect existing ones.
+- **Fail-fast** — Invalid env vars throw at startup with clear messages, not silently at runtime
+- **Type-safe** — `ConfigType<typeof factory>` infers exact shape without manual interfaces
+- **Namespace isolation** — Each namespace is independently validated and injected
 
 ### Cons
 
-- **Indirection layer** — `createNamespacedConfig` adds abstraction over `@nestjs/config`'s `registerAs`. Developers need to understand both the wrapper and the underlying library.
-- **Dual registration** — Namespaces must be listed in both the module's `forRoot({ namespaces })` and the config service's `@Inject()`. There's no auto-extraction since config factories must be registered at module initialization time (before DI).
-- **Map boilerplate** — Each namespace requires defining the schema, the map, and the type export. For simple configs this is more ceremony than plain `ConfigService.get()`.
+- **Indirection** — Adds abstraction over `@nestjs/config`'s `registerAs`
+- **Dual registration** — Namespaces listed in both `forRoot({ namespaces })` and `@Inject()` in the config service
 
-## Docker Design
+## Logger Module
 
-The Docker setup uses a **single parameterized Dockerfile** and a **composable Docker Compose structure** that scales with the number of microservices.
+Wraps **Pino** (via `nestjs-pino`) in a global `AppLoggerModule` (`libs/common/src/logger/`).
 
-### Dockerfile
+### Why Pino
 
-A 2-stage multi-stage build parameterized by `APP_NAME`:
+Pino was chosen over alternatives (Winston, Bunyan, built-in NestJS logger) for several reasons:
 
-| Stage | Purpose |
-| --- | --- |
-| **development** | Installs all deps, copies source, runs `pnpm -w exec nx build`. Used with compose for dev with hot reload. |
-| **production** | Installs prod deps only, copies built `dist/` from development stage. Runs `node dist/apps/<APP_NAME>/main`. |
+- **Performance** — Pino is the fastest Node.js logger. It uses worker threads for transport processing (pretty-printing, file I/O) so the main thread only writes minimal JSON. In benchmarks it's 5-10x faster than Winston.
+- **Structured JSON by default** — Every log line is a JSON object, ready for ingestion by log aggregators (ELK, Datadog, Loki) without custom formatting.
+- **Low overhead** — Minimal serialization cost. Pino avoids string interpolation and deferred evaluation patterns that slow down other loggers.
+- **First-class NestJS integration** — `nestjs-pino` provides automatic HTTP request/response logging, request context propagation, and `bufferLogs` support out of the box.
+- **Transport ecosystem** — Pluggable transports (`pino-pretty`, `pino-roll`, `pino-elasticsearch`, etc.) run in separate worker threads, keeping the main event loop clean.
 
-The same Dockerfile builds any app — just pass a different `APP_NAME` build arg.
+### Features
 
-### Docker Compose
+- **Pretty print** — Colorized single-line output in development via `pino-pretty`
+- **File rotation** — Daily rotating log files via `pino-roll` with configurable retention
+- **Request logging** — Automatic HTTP request/response logging with status-based log levels (5xx → error, 4xx → warn)
+- **Request ID tracking** — Extracts `x-request-id` header or generates `untraced-{uuid}` fallback
+- **Data redaction** — Automatically masks sensitive fields (passwords, tokens, card numbers, auth headers)
+- **Silent mode** — `LOG_LEVEL=silent` disables all output (used in tests)
+- **Global module** — `AppLogger` is injectable everywhere without per-module imports
 
-The compose setup separates shared configuration from per-app overrides:
+### Environment Variables
 
-```text
-docker-compose.yml              ← includes per-app compose files
-docker/
-  base.yml                      ← shared service template (build, env, volumes, command)
-  auth/
-    compose.override.yml        ← app-specific overrides (service name, port)
-    .env.docker                 ← APP_NAME=auth
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOG_LEVEL` | `debug` (dev) / `info` (prod) | Log level threshold |
+| `LOG_TO_FILE` | `false` | Enable daily rotating file logs |
+| `LOG_DIR` | `logs` | Directory for log files |
+| `LOG_RETENTION_DAYS` | `7` | Number of daily log files to keep |
 
-- **`docker/base.yml`** — Defines a reusable service template with `${APP_NAME}` interpolation. Handles build context, build args, container naming, the dev command (`pnpm -w run serve`), environment variables, and source volume mounts for hot reload.
-- **`docker/<app>/compose.override.yml`** — Only contains what's unique to each app: the service name and port mapping. Everything else is inherited via `extends`.
-- **`docker-compose.yml`** — Uses `include` to pull in each app's compose file, with `project_directory: .` for path resolution from the project root and `env_file` to inject the `APP_NAME` variable.
+### Pros
 
-### Makefile
+- **Minimal main-thread overhead** — Transports run in worker threads; the app only writes JSON to stdout
+- **Production-ready defaults** — Structured JSON, data redaction, request tracing, and file rotation work out of the box
+- **Test-friendly** — `LOG_LEVEL=silent` cleanly suppresses output; `forRootAsync` defers env reading so `beforeEach()` overrides work
+- **Simple API** — `AppLogger` implements NestJS `LoggerService`, so it's a drop-in replacement for the built-in logger
+
+### Cons
+
+- **Transport overhead for file logging** — `pino-roll` adds a worker thread and file I/O; for high-throughput services, a sidecar log collector (Fluentd, Filebeat) may be preferable
+- **No built-in log context** — Unlike Winston's `defaultMeta`, adding per-service context beyond `service`/`environment` requires manual `logger.log({ customField }, 'message')` calls
+- **Reads `process.env` directly** — The logger bypasses the config module so it's available before config validation runs; this means logger env vars aren't Zod-validated at startup
+
+## Docker
+
+Single parameterized `Dockerfile` (2-stage: development + production) with composable Docker Compose. Each app gets a `docker/<app>/compose.override.yml` that extends a shared `docker/base.yml` template.
 
 | Command | Description |
-| --- | --- |
+|---------|-------------|
 | `make build` | Build all Docker images |
-| `make up` | Start all containers in detached mode |
-| `make down` | Stop and remove all containers |
-| `make logs` | Interactive service selector — lists running containers and tails logs for your selection |
+| `make up` | Start all containers |
+| `make down` | Stop all containers |
+| `make logs` | Tail logs (interactive service selector) |
 
 ## Adding a New Microservice
 
-### 1. Generate the NestJS app
-
-```bash
-nest generate app <app-name>
-```
-
-This creates `apps/<app-name>/` with source files, `tsconfig.app.json`, and registers the project in `nest-cli.json`. Then install dependencies for the new workspace package:
-
-```bash
-pnpm install
-```
-
-### 2. Create Nx project config
-
-Create `apps/<app-name>/project.json` following the same pattern as `apps/auth/project.json`:
-
-```json
-{
-  "name": "<app-name>",
-  "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "apps/<app-name>/src",
-  "projectType": "application",
-  "tags": ["scope:<app-name>", "type:app"],
-  "targets": { }
-}
-```
-
-Create `apps/<app-name>/jest.config.ts` following the same pattern as `apps/auth/jest.config.ts`.
-
-Add a `scope:<app-name>` depConstraint in `eslint.config.mjs`.
-
-### 3. Create the Docker config
-
-```bash
-mkdir docker/<app-name>
-```
-
-Create `docker/<app-name>/.env.docker`:
-
-```text
-APP_NAME=<app-name>
-```
-
-Create `docker/<app-name>/compose.override.yml`:
-
-```yaml
-services:
-  <app-name>:
-    extends:
-      file: docker/base.yml
-      service: app
-    ports:
-      - '<port>:<port>'
-```
-
-### 4. Register in Docker Compose
-
-Add to `docker-compose.yml`:
-
-```yaml
-  - path: docker/<app-name>/compose.override.yml
-    project_directory: .
-    env_file: docker/<app-name>/.env.docker
-```
-
-### 5. Build and run
-
-```bash
-make build && make up
-make logs                # select your new service
-```
+1. `nest generate app <name>` then `pnpm install`
+2. Create `apps/<name>/project.json` (copy from `apps/auth/project.json`, update name/tags)
+3. Create `apps/<name>/jest.config.ts` and add `scope:<name>` to `eslint.config.mjs`
+4. Create `docker/<name>/.env.docker` and `docker/<name>/compose.override.yml`
+5. Register in `docker-compose.yml` include list
+6. `make build && make up`
 
 ## Development
 
 ```bash
-pnpm install                              # Install all dependencies
-pnpm serve <app-name>                     # Dev server with watch mode
+pnpm install                                 # Install all dependencies
+pnpm serve <app-name>                        # Dev server with watch mode
 pnpm serve <app-name> --configuration=debug  # Debug mode
-pnpm lint                                 # ESLint all projects
-pnpm format                               # Prettier
-pnpm test                                 # Unit tests (all projects)
-pnpm test:cov                             # Test coverage
-pnpm test:e2e                             # E2E tests (all apps)
-pnpm graph                                # Open dependency graph
-pnpm affected -t test                     # Test only affected projects
+pnpm lint                                    # ESLint all projects
+pnpm format                                  # Prettier
+pnpm test                                    # Unit tests
+pnpm test:e2e                                # E2E tests
+pnpm affected -t test                        # Test only affected projects
 ```

@@ -8,6 +8,7 @@ describe('PaymentsController (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
+    process.env.LOG_LEVEL = 'silent';
     process.env.SERVICE_NAME = 'payments';
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
