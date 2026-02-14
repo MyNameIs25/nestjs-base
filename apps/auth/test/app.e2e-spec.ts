@@ -8,6 +8,7 @@ describe('AuthController (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
+    process.env.LOG_LEVEL = 'silent';
     process.env.SERVICE_NAME = 'auth';
     process.env.DB_HOST = 'localhost';
     process.env.DB_PORT = '5432';
