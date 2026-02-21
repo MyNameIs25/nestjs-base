@@ -4,6 +4,7 @@ import {
   AppExceptionModule,
   AppInterceptorModule,
   AppLoggerModule,
+  AppMiddlewareModule,
 } from '@app/common';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
@@ -11,6 +12,7 @@ import { PaymentsService } from './payments.service';
 @Module({
   imports: [
     AppConfigModule.forRoot(),
+    AppMiddlewareModule,
     AppLoggerModule.forRoot(),
     AppExceptionModule,
     AppInterceptorModule,

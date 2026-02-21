@@ -120,6 +120,13 @@ Apps define error codes in `apps/{name}/src/errors.ts` using `defineErrorCodes({
 
 The interceptor pairs with the exception filter for symmetric responses: success → `{ success: true, data }`, error → `{ success: false, code, message }`. See `.claude/rules/interceptor.md` for detailed patterns.
 
+#### Middleware Module (`libs/common/src/middleware/`)
+
+- `request-id/request-id.middleware.ts` — `RequestIdMiddleware` sets `req.id` from the `x-request-id` header (or generates a UUID) and echoes it in the `X-Request-Id` response header. Decouples request tracing from logging.
+- `middleware.module.ts` — `AppMiddlewareModule` applies `RequestIdMiddleware` to all routes via `MiddlewareConsumer`
+
+Import `AppMiddlewareModule` **before** `AppLoggerModule` so `req.id` is set before pino-http reads it. See `.claude/rules/middleware.md` for detailed patterns.
+
 ### Configuration
 
 - `nx.json` — Nx workspace config (caching, task pipeline, named inputs)

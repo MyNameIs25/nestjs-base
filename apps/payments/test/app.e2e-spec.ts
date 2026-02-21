@@ -52,4 +52,30 @@ describe('PaymentsController (e2e)', () => {
         expect(body.traceId).toBeDefined();
       });
   });
+
+  it('/ (GET) should return X-Request-Id header with valid UUID', () => {
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    return request(app.getHttpServer())
+      .get('/')
+      .expect(200)
+      .expect((res) => {
+        const header = res.headers['x-request-id'];
+        expect(header).toMatch(uuidRegex);
+        const body = res.body as Record<string, unknown>;
+        expect(body.traceId).toBe(header);
+      });
+  });
+
+  it('/ (GET) should echo client-provided x-request-id', () => {
+    return request(app.getHttpServer())
+      .get('/')
+      .set('x-request-id', 'my-trace-123')
+      .expect(200)
+      .expect((res) => {
+        expect(res.headers['x-request-id']).toBe('my-trace-123');
+        const body = res.body as Record<string, unknown>;
+        expect(body.traceId).toBe('my-trace-123');
+      });
+  });
 });

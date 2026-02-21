@@ -137,10 +137,8 @@ function buildRequestLogConfig(opts: ResolvedOptions): Record<string, unknown> {
 // Serializers & request ID
 // ---------------------------------------------------------------------------
 
-function extractOrGenerateRequestId(req: IncomingMessage): string {
-  return (
-    (req.headers['x-request-id'] as string) ?? `untraced-${crypto.randomUUID()}`
-  );
+function readRequestId(req: IncomingMessage & { id?: string }): string {
+  return req.id ?? `untraced-${crypto.randomUUID()}`;
 }
 
 function buildSerializers() {
@@ -176,7 +174,7 @@ function buildLoggerConfig(options: AppLoggerOptions): Params {
       redact: [...opts.redactPaths],
       ...buildRequestLogConfig(opts),
       ...buildTransportConfig(targets),
-      genReqId: extractOrGenerateRequestId,
+      genReqId: readRequestId,
       serializers: buildSerializers(),
     },
     exclude: opts.exclude,
