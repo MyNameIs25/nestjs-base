@@ -11,3 +11,4 @@ A NestJS monorepo built incrementally to compare different library implementatio
 | 3‑1 | [Add config module with Zod validation](https://github.com/MyNameIs25/nestjs-base/pull/3) | Wrap `@nestjs/config` with Zod schemas, namespaced factories, and `@Inject(factory.KEY)` pattern |
 | 3‑2 | [Remove map parameter from config factory](https://github.com/MyNameIs25/nestjs-base/pull/4) | Simplify `createNamespacedConfig` to return env var names directly instead of mapped properties |
 | 4‑1 | [Add logger module using Pino](https://github.com/MyNameIs25/nestjs-base/pull/5) | Wrap `nestjs-pino` in a global `AppLoggerModule` with pretty print, file rotation, request tracing, and data redaction |
+| 5‑1 | [Add exception handling, response interceptor, and request-id middleware](https://github.com/MyNameIs25/nestjs-base/pull/6) | Add structured error codes, symmetric API envelope (success/error), and request-id tracing across HTTP/RPC/GraphQL |
