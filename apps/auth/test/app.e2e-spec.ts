@@ -26,10 +26,76 @@ describe('AuthController (e2e)', () => {
     await app.close();
   });
 
-  it('/ (GET)', () => {
+  it('/ (GET) should return success envelope', () => {
     return request(app.getHttpServer())
       .get('/')
       .expect(200)
-      .expect('Hello from auth!');
+      .expect((res) => {
+        const body = res.body as Record<string, unknown>;
+        expect(body).toMatchObject({
+          success: true,
+          data: 'Hello from auth!',
+        });
+        expect(body.timestamp).toBeDefined();
+        expect(body.traceId).toBeDefined();
+      });
+  });
+
+  it('/nonexistent (GET) should return error envelope', () => {
+    return request(app.getHttpServer())
+      .get('/nonexistent')
+      .expect(404)
+      .expect((res) => {
+        const body = res.body as Record<string, unknown>;
+        expect(body).toMatchObject({
+          success: false,
+          code: 'A00004',
+        });
+        expect(body.timestamp).toBeDefined();
+        expect(body.traceId).toBeDefined();
+      });
+  });
+
+  it('/error/biz (GET) should return user error with AUTH error code', () => {
+    return request(app.getHttpServer())
+      .get('/error/biz')
+      .expect(409)
+      .expect((res) => {
+        const body = res.body as Record<string, unknown>;
+        expect(body).toMatchObject({
+          success: false,
+          code: 'A01001',
+          message: 'Username "john" already exists',
+        });
+      });
+  });
+
+  it('/error/sys (GET) should return system error with devMessage', () => {
+    return request(app.getHttpServer())
+      .get('/error/sys')
+      .expect(500)
+      .expect((res) => {
+        const body = res.body as Record<string, unknown>;
+        expect(body).toMatchObject({
+          success: false,
+          code: 'B01001',
+          message: 'Auth service unavailable',
+          devMessage: 'Redis connection refused on port 6379',
+        });
+      });
+  });
+
+  it('/error/not-found (GET) should return common NOT_FOUND', () => {
+    return request(app.getHttpServer())
+      .get('/error/not-found')
+      .expect(404)
+      .expect((res) => {
+        const body = res.body as Record<string, unknown>;
+        expect(body).toMatchObject({
+          success: false,
+          code: 'A00004',
+          message: 'Not found',
+        });
+      });
   });
 });

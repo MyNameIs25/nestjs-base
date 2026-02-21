@@ -23,10 +23,33 @@ describe('PaymentsController (e2e)', () => {
     await app.close();
   });
 
-  it('/ (GET)', () => {
+  it('/ (GET) should return success envelope', () => {
     return request(app.getHttpServer())
       .get('/')
       .expect(200)
-      .expect('Hello from payments!');
+      .expect((res) => {
+        const body = res.body as Record<string, unknown>;
+        expect(body).toMatchObject({
+          success: true,
+          data: 'Hello from payments!',
+        });
+        expect(body.timestamp).toBeDefined();
+        expect(body.traceId).toBeDefined();
+      });
+  });
+
+  it('/nonexistent (GET) should return error envelope', () => {
+    return request(app.getHttpServer())
+      .get('/nonexistent')
+      .expect(404)
+      .expect((res) => {
+        const body = res.body as Record<string, unknown>;
+        expect(body).toMatchObject({
+          success: false,
+          code: 'A00004',
+        });
+        expect(body.timestamp).toBeDefined();
+        expect(body.traceId).toBeDefined();
+      });
   });
 });

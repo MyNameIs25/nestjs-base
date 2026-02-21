@@ -94,6 +94,84 @@ Pino was chosen over alternatives (Winston, Bunyan, built-in NestJS logger) for 
 - **No built-in log context** — Unlike Winston's `defaultMeta`, adding per-service context beyond `service`/`environment` requires manual `logger.log({ customField }, 'message')` calls
 - **Reads `process.env` directly** — The logger bypasses the config module so it's available before config validation runs; this means logger env vars aren't Zod-validated at startup
 
+## Exception Module
+
+Centralized error handling with **structured error codes** and **transport-agnostic** exception resolution (`libs/common/src/exception/`).
+
+### Error Code Format
+
+Every error code is a 6-character string: `[Source][Domain][Seq]`
+
+- **Source** — `A` (User/400), `B` (System/500), `C` (Third-party/502)
+- **Domain** — 2-digit number, centrally registered in `ERROR_DOMAINS` (e.g. `00`=Common, `01`=Auth, `02`=Payments)
+- **Seq** — 3-digit sequence within source+domain (001–999)
+
+```typescript
+const AUTH_ERRORS = defineErrorCodes({ domain: ERROR_DOMAINS.AUTH }, {
+  USERNAME_TAKEN: { source: ERROR_SOURCE.USER, seq: 1, httpStatus: 409, message: 'Username "%s" already exists' },
+  AUTH_SERVICE_DOWN: { source: ERROR_SOURCE.SYSTEM, seq: 1, message: 'Auth service unavailable' },
+});
+// → A01001 (409), B01001 (500 default)
+
+throw new AppException(AUTH_ERRORS.USERNAME_TAKEN, { args: ['john'] });
+// → 409, code: "A01001", message: "Username \"john\" already exists"
+```
+
+### Architecture
+
+- **`ExceptionHandler`** — Injectable service with `resolve()` (exception → error info) and `log()` (warn for user errors, error for system/third-party). Transport-agnostic — reusable across HTTP, gRPC, GraphQL.
+- **`AppExceptionFilter`** — Unified filter that auto-detects transport via `host.getType()`. HTTP → JSON response, RPC → `throwError()` observable, GraphQL → re-throws as `HttpException` with extensions.
+- **`AppExceptionModule`** — Registers both. Import in app root module — transport detection is automatic.
+
+### Pros
+
+- **Fail-fast validation** — Domain format, source, seq range, and duplicate codes are all validated at definition time
+- **Centralized domain registry** — `ERROR_DOMAINS` prevents domain number conflicts across microservices
+- **Transport-agnostic** — Single filter auto-detects HTTP, gRPC, and GraphQL via `host.getType()` — no per-transport configuration needed
+- **Uniform responses** — All exceptions (custom, NestJS built-in, unknown) produce the same structured error format
+
+### Cons
+
+- **HTTP status as canonical status** — `httpStatus` on `ErrorCodeDef` is HTTP-specific; other transports need a mapping layer (e.g. HTTP 404 → gRPC `NOT_FOUND`)
+- **Static message templates** — `%s` interpolation is simple; complex formatting requires manual string building in `devMessage`
+
+## Interceptor Module
+
+Global response interceptor that wraps successful responses in a uniform envelope (`libs/common/src/interceptor/`).
+
+### Transport Behavior
+
+The `ResponseInterceptor` auto-detects transport via `context.getType()`:
+
+| Transport | Behavior | traceId Source |
+|-----------|----------|----------------|
+| HTTP | Wraps in `{ success, data, timestamp, traceId }` | `request.id` |
+| RPC (gRPC) | Wraps in `{ success, data, timestamp, traceId }` | gRPC metadata `x-request-id` |
+| GraphQL | Pass-through | N/A — GraphQL engine manages `{ data, errors }` |
+
+### Symmetric with Exception Module
+
+Together, the interceptor and exception filter produce a consistent API:
+
+```json
+// Success (ResponseInterceptor)
+{ "success": true, "data": { ... }, "timestamp": "...", "traceId": "..." }
+
+// Error (AppExceptionFilter)
+{ "success": false, "code": "A01001", "message": "...", "timestamp": "...", "traceId": "..." }
+```
+
+### Pros
+
+- **Uniform API envelope** — All HTTP/RPC responses share the same `{ success, data, timestamp, traceId }` structure
+- **Transport-agnostic** — Single interceptor auto-detects transport, no per-transport configuration
+- **GraphQL-safe** — Correctly passes through for GraphQL, which has its own `{ data, errors }` protocol
+
+### Cons
+
+- **Envelope overhead for RPC** — Wrapping adds fields beyond the protobuf contract; clients must account for the envelope shape
+- **No per-route opt-out** — All routes get wrapped; excluding specific routes requires a custom decorator
+
 ## Docker
 
 Single parameterized `Dockerfile` (2-stage: development + production) with composable Docker Compose. Each app gets a `docker/<app>/compose.override.yml` that extends a shared `docker/base.yml` template.
@@ -110,9 +188,29 @@ Single parameterized `Dockerfile` (2-stage: development + production) with compo
 1. `nest generate app <name>` then `pnpm install`
 2. Create `apps/<name>/project.json` (copy from `apps/auth/project.json`, update name/tags)
 3. Create `apps/<name>/jest.config.ts` and add `scope:<name>` to `eslint.config.mjs`
-4. Create `docker/<name>/.env.docker` and `docker/<name>/compose.override.yml`
-5. Register in `docker-compose.yml` include list
-6. `make build && make up`
+4. Register error domain in `libs/common/src/exception/exception.registry.ts`:
+   ```typescript
+   export const ERROR_DOMAINS = { ..., MY_SERVICE: '03' } as const;
+   ```
+5. Create `apps/<name>/src/errors.ts` with app-specific error codes:
+   ```typescript
+   export const MY_SERVICE_ERRORS = defineErrorCodes(
+     { domain: ERROR_DOMAINS.MY_SERVICE },
+     { ... },
+   );
+   ```
+6. Import shared modules in the app root module:
+   ```typescript
+   imports: [
+     MyServiceConfigModule,
+     AppLoggerModule.forRoot(),
+     AppExceptionModule,      // Error handling (auto-detects transport)
+     AppInterceptorModule,    // Success response envelope (auto-detects transport)
+   ]
+   ```
+7. Create `docker/<name>/.env.docker` and `docker/<name>/compose.override.yml`
+8. Register in `docker-compose.yml` include list
+9. `make build && make up`
 
 ## Development
 
