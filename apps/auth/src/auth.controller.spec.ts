@@ -2,7 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthConfigService } from './config';
-import { AppLogger } from '@app/common';
+import { AppException, AppLogger } from '@app/common';
+import { AUTH_ERRORS } from './errors';
 
 describe('AuthController', () => {
   let authController: AuthController;
@@ -37,6 +38,30 @@ describe('AuthController', () => {
   describe('root', () => {
     it('should return greeting with service name', () => {
       expect(authController.getHello()).toBe('Hello from auth!');
+    });
+  });
+
+  describe('error/:type', () => {
+    it('should throw biz error with interpolated message', () => {
+      expect(() => authController.triggerError('biz')).toThrow(AppException);
+      try {
+        authController.triggerError('biz');
+      } catch (e) {
+        const ex = e as AppException;
+        expect(ex.errorCode).toBe(AUTH_ERRORS.USERNAME_TAKEN);
+        expect(ex.userMessage).toBe('Username "john" already exists');
+      }
+    });
+
+    it('should throw sys error with devMessage', () => {
+      expect(() => authController.triggerError('sys')).toThrow(AppException);
+      try {
+        authController.triggerError('sys');
+      } catch (e) {
+        const ex = e as AppException;
+        expect(ex.errorCode).toBe(AUTH_ERRORS.AUTH_SERVICE_DOWN);
+        expect(ex.devMessage).toBe('Redis connection refused on port 6379');
+      }
     });
   });
 });

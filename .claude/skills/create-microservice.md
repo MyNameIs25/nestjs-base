@@ -101,10 +101,12 @@ export default {
 
 ```typescript
 import { NestFactory } from '@nestjs/core';
+import { AppLogger } from '@app/common';
 import { {PascalName}Module } from './{name}.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create({PascalName}Module);
+  const app = await NestFactory.create({PascalName}Module, { bufferLogs: true });
+  app.useLogger(app.get(AppLogger));
   await app.listen(process.env.PORT ?? {port});
 }
 bootstrap();
@@ -114,11 +116,24 @@ bootstrap();
 
 ```typescript
 import { Module } from '@nestjs/common';
+import {
+  AppConfigModule,
+  AppExceptionModule,
+  AppInterceptorModule,
+  AppLoggerModule,
+  AppMiddlewareModule,
+} from '@app/common';
 import { {PascalName}Controller } from './{name}.controller';
 import { {PascalName}Service } from './{name}.service';
 
 @Module({
-  imports: [],
+  imports: [
+    AppConfigModule.forRoot(),
+    AppMiddlewareModule,
+    AppLoggerModule.forRoot(),
+    AppExceptionModule,
+    AppInterceptorModule,
+  ],
   controllers: [{PascalName}Controller],
   providers: [{PascalName}Service],
 })
@@ -146,6 +161,7 @@ export class {PascalName}Controller {
 
 ```typescript
 import { Test, TestingModule } from '@nestjs/testing';
+import { AppLogger } from '@app/common';
 import { {PascalName}Controller } from './{name}.controller';
 import { {PascalName}Service } from './{name}.service';
 
@@ -155,15 +171,26 @@ describe('{PascalName}Controller', () => {
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({
       controllers: [{PascalName}Controller],
-      providers: [{PascalName}Service],
+      providers: [
+        {PascalName}Service,
+        {
+          provide: AppLogger,
+          useValue: {
+            log: jest.fn(),
+            error: jest.fn(),
+            warn: jest.fn(),
+            debug: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
     {camelName}Controller = app.get<{PascalName}Controller>({PascalName}Controller);
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect({camelName}Controller.getHello()).toBe('Hello World!');
+    it('should return greeting with service name', () => {
+      expect({camelName}Controller.getHello()).toBe('Hello from {name}!');
     });
   });
 });
@@ -173,11 +200,15 @@ describe('{PascalName}Controller', () => {
 
 ```typescript
 import { Injectable } from '@nestjs/common';
+import { AppLogger } from '@app/common';
 
 @Injectable()
 export class {PascalName}Service {
+  constructor(private readonly logger: AppLogger) {}
+
   getHello(): string {
-    return 'Hello World!';
+    this.logger.log('Hello from {name}!');
+    return 'Hello from {name}!';
   }
 }
 ```
@@ -195,6 +226,9 @@ describe('{PascalName}Controller (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
+    process.env.LOG_LEVEL = 'silent';
+    process.env.SERVICE_NAME = '{name}';
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [{PascalName}Module],
     }).compile();
@@ -203,11 +237,64 @@ describe('{PascalName}Controller (e2e)', () => {
     await app.init();
   });
 
-  it('/ (GET)', () => {
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('/ (GET) should return success envelope', () => {
     return request(app.getHttpServer())
       .get('/')
       .expect(200)
-      .expect('Hello World!');
+      .expect((res) => {
+        const body = res.body as Record<string, unknown>;
+        expect(body).toMatchObject({
+          success: true,
+          data: 'Hello from {name}!',
+        });
+        expect(body.timestamp).toBeDefined();
+        expect(body.traceId).toBeDefined();
+      });
+  });
+
+  it('/nonexistent (GET) should return error envelope', () => {
+    return request(app.getHttpServer())
+      .get('/nonexistent')
+      .expect(404)
+      .expect((res) => {
+        const body = res.body as Record<string, unknown>;
+        expect(body).toMatchObject({
+          success: false,
+          code: 'A00004',
+        });
+        expect(body.timestamp).toBeDefined();
+        expect(body.traceId).toBeDefined();
+      });
+  });
+
+  it('/ (GET) should return X-Request-Id header with valid UUID', () => {
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    return request(app.getHttpServer())
+      .get('/')
+      .expect(200)
+      .expect((res) => {
+        const header = res.headers['x-request-id'];
+        expect(header).toMatch(uuidRegex);
+        const body = res.body as Record<string, unknown>;
+        expect(body.traceId).toBe(header);
+      });
+  });
+
+  it('/ (GET) should echo client-provided x-request-id', () => {
+    return request(app.getHttpServer())
+      .get('/')
+      .set('x-request-id', 'my-trace-123')
+      .expect(200)
+      .expect((res) => {
+        expect(res.headers['x-request-id']).toBe('my-trace-123');
+        const body = res.body as Record<string, unknown>;
+        expect(body.traceId).toBe('my-trace-123');
+      });
   });
 });
 ```

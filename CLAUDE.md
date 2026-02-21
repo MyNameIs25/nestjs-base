@@ -63,6 +63,7 @@ NestJS monorepo (`nest-cli.json` with `monorepo: true`) using pnpm workspaces fo
   - `apps/auth/src/main.ts` — Bootstrap entry point
   - `apps/auth/src/auth.module.ts` — Root module
   - `apps/auth/src/auth.controller.ts` + `auth.service.ts` — Default controller/service pair
+  - `apps/auth/src/errors.ts` — Auth-specific error codes (domain `01`)
   - `apps/auth/test/` — E2E tests
   - `apps/auth/package.json` — App-level runtime dependencies
   - `apps/auth/project.json` — Nx project config and targets
@@ -98,6 +99,33 @@ Apps encapsulate config in a `{PascalName}ConfigModule` that wraps `AppConfigMod
 - `types/logger.type.ts` — `LogLevel`, `AppLoggerOptions`, `AppLoggerAsyncOptions`
 
 The logger reads `process.env` directly (not via ConfigModule) so it's available before config validation runs. See `.claude/rules/logger.md` for detailed patterns.
+
+#### Exception Module (`libs/common/src/exception/`)
+
+- `exception.registry.ts` — `ERROR_SOURCE` (A/B/C) and `ERROR_DOMAINS` (centralized domain number registry)
+- `exception.constants.ts` — `COMMON_ERRORS` (shared error codes for domain `00`), `HTTP_STATUS_TO_ERROR` mapping
+- `factories/error-codes.factory.ts` — `defineErrorCodes({ domain }, defs)` validates and auto-composes error codes (`source + domain + seq.padStart(3, '0')`)
+- `exceptions/base.exception.ts` — `AppException` extends `HttpException` with `errorCode`, `userMessage`, `devMessage`, `%s` interpolation
+- `exception.handler.ts` — `ExceptionHandler` (injectable service): `resolve(exception)` maps any exception to `ResolvedError` (5 cases: AppException → HttpException → RpcException → GraphQLError → unknown), `log()` writes warn/error based on source. Transport-agnostic.
+- `filters/app-exception.filter.ts` — `AppExceptionFilter` auto-detects transport via `host.getType()`: HTTP → JSON response, RPC → `throwError()` observable, GraphQL → re-throws as `HttpException` with extensions
+- `exception.module.ts` — `AppExceptionModule` registers `ExceptionHandler` (exported) and `AppExceptionFilter` (via `APP_FILTER`)
+- `types/exception.type.ts` — `ErrorSource`, `ErrorCodeDef`, `ResolvedError`, `ErrorResponseBody` types
+
+Apps define error codes in `apps/{name}/src/errors.ts` using `defineErrorCodes({ domain: ERROR_DOMAINS.{NAME} }, { ... })`. See `apps/auth/src/errors.ts` for reference and `.claude/rules/exception.md` for detailed patterns.
+
+#### Interceptor Module (`libs/common/src/interceptor/`)
+
+- `response/response.interceptor.ts` — `ResponseInterceptor` auto-detects transport via `context.getType()`: HTTP/RPC → wraps in `{ success: true, data, timestamp, traceId }`, GraphQL → pass-through (engine manages `{ data, errors }` format). RPC traceId extracted from gRPC metadata.
+- `interceptor.module.ts` — `AppInterceptorModule` registers `ResponseInterceptor` (via `APP_INTERCEPTOR`)
+
+The interceptor pairs with the exception filter for symmetric responses: success → `{ success: true, data }`, error → `{ success: false, code, message }`. See `.claude/rules/interceptor.md` for detailed patterns.
+
+#### Middleware Module (`libs/common/src/middleware/`)
+
+- `request-id/request-id.middleware.ts` — `RequestIdMiddleware` sets `req.id` from the `x-request-id` header (or generates a UUID) and echoes it in the `X-Request-Id` response header. Decouples request tracing from logging.
+- `middleware.module.ts` — `AppMiddlewareModule` applies `RequestIdMiddleware` to all routes via `MiddlewareConsumer`
+
+Import `AppMiddlewareModule` **before** `AppLoggerModule` so `req.id` is set before pino-http reads it. See `.claude/rules/middleware.md` for detailed patterns.
 
 ### Configuration
 
