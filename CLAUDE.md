@@ -64,6 +64,8 @@ NestJS monorepo (`nest-cli.json` with `monorepo: true`) using pnpm workspaces fo
   - `apps/auth/src/auth.module.ts` — Root module
   - `apps/auth/src/auth.controller.ts` + `auth.service.ts` — Default controller/service pair
   - `apps/auth/src/errors.ts` — Auth-specific error codes (domain `01`)
+  - `apps/auth/src/config/` — Auth-specific config module, service, and schemas
+  - `apps/auth/src/users/` — Users domain: Drizzle schema (`user.schema.ts`), repository (`user.repository.ts`), module (`users.module.ts`)
   - `apps/auth/test/` — E2E tests
   - `apps/auth/package.json` — App-level runtime dependencies
   - `apps/auth/project.json` — Nx project config and targets
@@ -126,6 +128,16 @@ The interceptor pairs with the exception filter for symmetric responses: success
 - `middleware.module.ts` — `AppMiddlewareModule` applies `RequestIdMiddleware` to all routes via `MiddlewareConsumer`
 
 Import `AppMiddlewareModule` **before** `AppLoggerModule` so `req.id` is set before pino-http reads it. See `.claude/rules/middleware.md` for detailed patterns.
+
+#### Database Module (`libs/common/src/database/`)
+
+- `database.module.ts` — `AppDatabaseModule.forRoot()` / `forRootAsync()` wraps Drizzle ORM with `node-postgres`. Global module — `@InjectDrizzle()` works everywhere.
+- `database.constants.ts` — `DRIZZLE` injection token (Symbol)
+- `database.decorator.ts` — `@InjectDrizzle()` parameter decorator
+- `repository/base.repository.ts` — `BaseRepository<TTable>` abstract class with generic CRUD: `findAll`, `findOne`, `findById`, `create`, `createMany`, `update`, `updateById`, `delete`, `deleteById`. All mutating methods use `.returning()`.
+- `types/database.type.ts` — `DrizzleDB`, `AppDatabaseOptions`, `AppDatabaseAsyncOptions` types
+
+Schema files live in app-level domain directories (e.g., `apps/auth/src/users/user.schema.ts`), not in the common lib. Each domain gets its own module encapsulating the repository. See `apps/auth/src/users/` for reference and `.claude/rules/database.md` for detailed patterns.
 
 ### Configuration
 

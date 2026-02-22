@@ -135,6 +135,68 @@ throw new AppException(AUTH_ERRORS.USERNAME_TAKEN, { args: ['john'] });
 - **HTTP status as canonical status** — `httpStatus` on `ErrorCodeDef` is HTTP-specific; other transports need a mapping layer (e.g. HTTP 404 → gRPC `NOT_FOUND`)
 - **Static message templates** — `%s` interpolation is simple; complex formatting requires manual string building in `devMessage`
 
+## Database Module
+
+Wraps **Drizzle ORM** with `node-postgres` in a global `AppDatabaseModule` (`libs/common/src/database/`). Provides an abstract `BaseRepository` for type-safe CRUD operations.
+
+### Why Drizzle
+
+Drizzle was chosen over alternatives (TypeORM, Prisma, MikroORM) for several reasons:
+
+- **SQL-first** — Drizzle generates queries that map 1:1 to SQL. No magic, no hidden N+1 queries. What you write is what runs.
+- **Zero runtime overhead** — ~7.4kb minified+gzipped, no query engine binary, no runtime code generation. Starts instantly.
+- **Type-safe schema-as-code** — Table definitions are TypeScript objects. `InferSelectModel<T>` and `InferInsertModel<T>` derive types directly from the schema — no code generation step.
+- **Flexible query API** — Both SQL-like (`db.select().from().where()`) and relational (`db.query.users.findMany({ with: { posts: true } })`) APIs available.
+- **Lightweight migrations** — `drizzle-kit generate` diffs your TypeScript schema against the database and produces plain SQL migration files. No lock files, no migration engine at runtime.
+
+### Features
+
+- **Global module** — `AppDatabaseModule.forRoot()` / `forRootAsync()` registers globally; `@InjectDrizzle()` works everywhere
+- **Connection pooling** — Manages `pg.Pool` with sensible defaults (max 20, 10s idle/connection timeout)
+- **Graceful shutdown** — Pool is closed automatically via `OnApplicationShutdown`
+- **Abstract repository** — `BaseRepository<TTable>` provides `findAll`, `findOne`, `findById`, `create`, `createMany`, `update`, `updateById`, `delete`, `deleteById`
+- **Domain encapsulation** — Schema + repository + module per domain (e.g., `users/`), imported into the app root module
+
+### Usage
+
+```typescript
+// 1. Define schema
+export const users = pgTable('users', {
+  id: uuid().primaryKey().defaultRandom(),
+  email: varchar({ length: 255 }).notNull().unique(),
+});
+
+// 2. Create repository
+@Injectable()
+export class UserRepository extends BaseRepository<typeof users> {
+  constructor(@InjectDrizzle() db: DrizzleDB) {
+    super(db, users, users.id);
+  }
+  async findByEmail(email: string) {
+    return this.findOne(eq(users.email, email));
+  }
+}
+
+// 3. Wire module
+AppDatabaseModule.forRootAsync({
+  inject: [ConfigService],
+  useFactory: (config) => ({ pool: { host: config.database.host, ... } }),
+})
+```
+
+### Pros
+
+- **No code generation** — Unlike Prisma, no `prisma generate` step. Schema changes are immediately reflected in TypeScript types.
+- **Predictable queries** — Unlike TypeORM's query builder or Prisma's engine, Drizzle generates exactly the SQL you'd write by hand.
+- **Thin abstraction** — The repository pattern adds type-safe CRUD without hiding Drizzle's API. Custom queries use Drizzle directly.
+- **Fast startup** — No introspection, no schema synchronization, no binary downloads at startup.
+
+### Cons
+
+- **Type assertions in base repository** — Drizzle's complex generic types require `as any` casts in the abstract `BaseRepository`. Concrete repositories are fully typed.
+- **No runtime schema sync** — Unlike TypeORM's `synchronize`, you must run migrations explicitly. This is intentional for production safety.
+- **Younger ecosystem** — Fewer community plugins and adapters compared to TypeORM or Prisma.
+
 ## Interceptor Module
 
 Global response interceptor that wraps successful responses in a uniform envelope (`libs/common/src/interceptor/`).
