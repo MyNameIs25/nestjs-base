@@ -13,6 +13,8 @@ describe('AuthController (e2e)', () => {
     process.env.DB_HOST = 'localhost';
     process.env.DB_PORT = '5432';
     process.env.DB_NAME = 'auth_db';
+    process.env.DB_USER = 'postgres';
+    process.env.DB_PASSWORD = 'postgres';
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AuthModule],
