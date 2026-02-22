@@ -19,6 +19,7 @@ import { UsersModule } from './users';
     AppExceptionModule,
     AppInterceptorModule,
     AppDatabaseModule.forRootAsync({
+      imports: [AuthConfigModule],
       inject: [AuthConfigService],
       useFactory: (config: AuthConfigService) => ({
         pool: {
