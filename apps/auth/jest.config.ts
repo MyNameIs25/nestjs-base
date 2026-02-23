@@ -4,6 +4,7 @@ export default {
   testMatch: ['<rootDir>/src/**/*.spec.ts'],
   moduleNameMapper: {
     '^@app/common(|/.*)$': '<rootDir>/../../libs/common/src/$1',
+    '^@auth/(.*)$': '<rootDir>/src/$1',
   },
   coverageDirectory: '../../coverage/apps/auth',
 };

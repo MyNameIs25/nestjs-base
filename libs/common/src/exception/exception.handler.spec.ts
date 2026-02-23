@@ -91,6 +91,48 @@ describe('ExceptionHandler', () => {
       expect(result.status).toBe(418);
     });
 
+    it('should resolve HttpException with errors array as VALIDATION_FAILED', () => {
+      const ex = new HttpException(
+        {
+          statusCode: 400,
+          message: 'Validation failed',
+          errors: [
+            { path: ['email'], message: 'Invalid email' },
+            { path: ['password'], message: 'Must be at least 8 characters' },
+          ],
+        },
+        400,
+      );
+      const result = handler.resolve(ex);
+
+      expect(result.errorCode.code).toBe('A00005');
+      expect(result.message).toBe('Validation failed');
+      expect(result.errors).toEqual([
+        { field: 'email', message: 'Invalid email' },
+        { field: 'password', message: 'Must be at least 8 characters' },
+      ]);
+      expect(result.devMessage).toBe(
+        'email: Invalid email; password: Must be at least 8 characters',
+      );
+      expect(result.status).toBe(400);
+    });
+
+    it('should join nested path in validation errors', () => {
+      const ex = new HttpException(
+        {
+          statusCode: 400,
+          message: 'Validation failed',
+          errors: [{ path: ['address', 'zip'], message: 'Required' }],
+        },
+        400,
+      );
+      const result = handler.resolve(ex);
+
+      expect(result.errors).toEqual([
+        { field: 'address.zip', message: 'Required' },
+      ]);
+    });
+
     it('should resolve unknown errors as INTERNAL_SERVER_ERROR', () => {
       const result = handler.resolve(new Error('something broke'));
 
