@@ -10,6 +10,7 @@ import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ApiTags } from '@nestjs/swagger';
 import { LocalAuthService } from './local-auth.service';
 import { TokenMetadata } from '@auth/tokens';
+import { THROTTLE_PRESETS } from '@app/common';
 import { RequestMetadata } from '../../decorators/request-metadata.decorator';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -23,10 +24,7 @@ export class LocalAuthController {
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(ThrottlerGuard)
-  @Throttle({
-    short: { ttl: 60_000, limit: 3 },
-    long: { ttl: 600_000, limit: 10 },
-  })
+  @Throttle(THROTTLE_PRESETS.STRICT)
   @ApiTokenPairEndpoint({
     summary: 'Register with email and password',
     status: 201,
@@ -46,10 +44,7 @@ export class LocalAuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @UseGuards(ThrottlerGuard)
-  @Throttle({
-    short: { ttl: 60_000, limit: 5 },
-    long: { ttl: 600_000, limit: 20 },
-  })
+  @Throttle(THROTTLE_PRESETS.DEFAULT)
   @ApiTokenPairEndpoint({
     summary: 'Login with email and password',
     errors: {

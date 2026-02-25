@@ -29,6 +29,7 @@ function getParamDecoratorFactory(
 
 describe('CurrentUser decorator', () => {
   const mockPayload: AccessTokenPayload = {
+    jti: 'mock-jti',
     sub: 'user-1',
     email: 'test@example.com',
   };

@@ -14,8 +14,8 @@ export class ManagedTransaction {
     if (this.settled) return;
     try {
       await this.client.query('COMMIT');
-      this.settled = true;
     } finally {
+      this.settled = true;
       this.client.release();
     }
   }
@@ -24,8 +24,8 @@ export class ManagedTransaction {
     if (this.settled) return;
     try {
       await this.client.query('ROLLBACK');
-      this.settled = true;
     } finally {
+      this.settled = true;
       this.client.release();
     }
   }

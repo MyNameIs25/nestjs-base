@@ -22,6 +22,10 @@ async function bootstrap() {
     .map((o) => o.trim())
     .filter(Boolean);
 
+  if (!isDev && corsOrigins.length === 0) {
+    throw new Error('CORS_ORIGIN must be set in production');
+  }
+
   app.enableCors({
     origin: isDev ? true : corsOrigins,
     credentials: true,

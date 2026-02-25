@@ -7,8 +7,10 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { TokenService, TokenMetadata } from './tokens';
+import { THROTTLE_PRESETS } from '@app/common';
 import {
   JwtAuthGuard,
   RequestMetadata,
@@ -25,9 +27,15 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard)
+  @Throttle(THROTTLE_PRESETS.RELAXED)
   @ApiTokenPairEndpoint({
     summary: 'Refresh access token',
-    errors: { 400: 'Validation error', 401: 'Invalid or reused refresh token' },
+    errors: {
+      400: 'Validation error',
+      401: 'Invalid or reused refresh token',
+      429: 'Too many requests',
+    },
   })
   async refresh(
     @Body() dto: RefreshTokenDto,

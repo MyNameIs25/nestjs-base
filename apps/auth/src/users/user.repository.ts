@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { BaseRepository, InjectDrizzle, DrizzleDB } from '@app/common';
 import { users } from './schemas/user.schema';
 
@@ -10,6 +10,6 @@ export class UserRepository extends BaseRepository<typeof users> {
   }
 
   async findByEmail(email: string) {
-    return this.findOne(eq(users.email, email));
+    return this.findOne(and(eq(users.email, email), isNull(users.deletedAt)));
   }
 }

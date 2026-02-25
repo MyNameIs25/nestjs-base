@@ -9,6 +9,7 @@ describe('JwtAuthGuard', () => {
   let verifyAccessToken: jest.Mock;
 
   const mockPayload = {
+    jti: 'mock-jti',
     sub: 'user-1',
     email: 'test@example.com',
   };

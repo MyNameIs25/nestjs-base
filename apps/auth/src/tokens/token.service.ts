@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes, randomUUID, createHash } from 'crypto';
 import {
   AppException,
   COMMON_ERRORS,
@@ -24,6 +24,7 @@ export interface TokenMetadata {
 }
 
 export interface AccessTokenPayload {
+  jti: string;
   sub: string;
   email: string;
 }
@@ -68,8 +69,8 @@ export class TokenService {
       }
 
       if (existingToken.revoked) {
-        await tx.rollback();
-        await this.tokenRepository.revokeAllForUser(existingToken.userId);
+        await tokenRepo.revokeAllForUser(existingToken.userId);
+        await tx.commit();
         throw new AppException(AUTH_ERRORS.TOKEN_REUSE_DETECTED);
       }
 
@@ -124,7 +125,11 @@ export class TokenService {
   }
 
   private signAccessToken(userId: string, email: string): string {
-    const payload: AccessTokenPayload = { sub: userId, email };
+    const payload: AccessTokenPayload = {
+      jti: randomUUID(),
+      sub: userId,
+      email,
+    };
     return this.jwtService.sign(payload, {
       secret: this.config.jwt.secret,
       expiresIn: parseDuration(this.config.jwt.accessExpiry) / 1000,

@@ -5,3 +5,4 @@ export * from './interceptor';
 export * from './logger';
 export * from './middleware';
 export * from './swagger';
+export * from './constants';

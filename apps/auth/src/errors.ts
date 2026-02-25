@@ -28,7 +28,7 @@ export const AUTH_ERRORS = defineErrorCodes(
       message: 'Invalid or expired refresh token',
     },
     TOKEN_REUSE_DETECTED: {
-      source: ERROR_SOURCE.SYSTEM,
+      source: ERROR_SOURCE.USER,
       seq: 6,
       httpStatus: 401,
       message: 'Token reuse detected, all sessions revoked',

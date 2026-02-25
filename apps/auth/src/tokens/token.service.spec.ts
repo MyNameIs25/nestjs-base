@@ -25,6 +25,7 @@ describe('TokenService', () => {
   beforeEach(async () => {
     mockJwtSign = jest.fn().mockReturnValue('mock-access-token');
     mockJwtVerify = jest.fn().mockReturnValue({
+      jti: 'mock-jti',
       sub: 'user-1',
       email: 'test@example.com',
     });
@@ -233,6 +234,7 @@ describe('TokenService', () => {
       const result = service.verifyAccessToken('some-jwt');
 
       expect(result).toEqual({
+        jti: 'mock-jti',
         sub: 'user-1',
         email: 'test@example.com',
       });
