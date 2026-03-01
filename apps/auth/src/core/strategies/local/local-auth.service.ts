@@ -50,9 +50,12 @@ export class LocalAuthService implements IAuthStrategy {
 
       const existing = await userRepo.findByEmail(dto.email);
       if (existing) {
-        throw new AppException(AUTH_ERRORS.EMAIL_TAKEN, {
-          args: [dto.email],
-        });
+        if (existing.emailVerified) {
+          throw new AppException(AUTH_ERRORS.EMAIL_TAKEN, {
+            args: [dto.email],
+          });
+        }
+        await userRepo.deleteById(existing.id);
       }
 
       const user = await userRepo.create({
