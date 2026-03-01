@@ -105,6 +105,27 @@ describe('AppExceptionFilter', () => {
         expect.objectContaining({ traceId: 'unknown' }),
       );
     });
+
+    it('should include validation errors in response body', () => {
+      const { host, json } = createMockHttpHost('req-v');
+      const ex = new HttpException(
+        {
+          statusCode: 400,
+          message: 'Validation failed',
+          errors: [{ path: ['email'], message: 'Invalid email' }],
+        },
+        400,
+      );
+
+      filter.catch(ex, host);
+
+      expect(json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'A00005',
+          errors: [{ field: 'email', message: 'Invalid email' }],
+        }),
+      );
+    });
   });
 
   describe('RPC transport', () => {

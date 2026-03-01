@@ -6,6 +6,7 @@ services:
       args:
         APP_NAME: ${APP_NAME}
     container_name: ${APP_NAME}
+    entrypoint: ["/bin/sh", "docker/entrypoint.sh"]
     command: pnpm -w run serve ${APP_NAME}
     depends_on:
       - postgres

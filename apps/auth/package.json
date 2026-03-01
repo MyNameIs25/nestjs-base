@@ -2,6 +2,9 @@
   "name": "auth",
   "version": "0.0.1",
   "private": true,
-  "dependencies": {},
+  "dependencies": {
+    "@nestjs/jwt": "^11.0.2",
+    "argon2": "^0.44.0"
+  },
   "devDependencies": {}
 }

@@ -17,10 +17,16 @@ export interface ErrorCodeDef {
   readonly message: string;
 }
 
+export interface ValidationError {
+  field: string;
+  message: string;
+}
+
 export interface ResolvedError {
   errorCode: ErrorCodeDef;
   message: string;
   devMessage?: string;
+  errors?: ValidationError[];
   status: number;
 }
 
@@ -29,6 +35,7 @@ export interface ErrorResponseBody {
   code: string;
   message: string;
   devMessage?: string;
+  errors?: ValidationError[];
   timestamp: string;
   traceId: string;
 }

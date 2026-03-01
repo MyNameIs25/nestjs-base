@@ -16,6 +16,9 @@
     "test:e2e": "nx run-many -t e2e",
     "graph": "nx graph",
     "affected": "nx affected",
+    "db-generate": "sh -c 'drizzle-kit generate --config apps/$0/drizzle.config.ts \"$@\"'",
+    "db-migrate": "sh -c 'drizzle-kit migrate --config apps/$0/drizzle.config.ts \"$@\"'",
+    "db-studio": "sh -c 'drizzle-kit studio --config apps/$0/drizzle.config.ts \"$@\"'",
     "prepare": "husky"
   },
   "dependencies": {
@@ -24,9 +27,13 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/microservices": "^11.1.14",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/swagger": "^11.2.6",
+    "@nestjs/throttler": "^6.5.0",
     "drizzle-orm": "^0.45.1",
     "graphql": "^16.12.0",
+    "helmet": "^8.1.0",
     "nestjs-pino": "^4.5.0",
+    "nestjs-zod": "^5.1.1",
     "pg": "^8.18.0",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
@@ -76,6 +83,12 @@
     "*.ts": [
       "eslint --fix",
       "prettier --write"
+    ]
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "argon2",
+      "esbuild"
     ]
   }
 }

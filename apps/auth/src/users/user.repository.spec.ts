@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-floating-promises */
 import { UserRepository } from './user.repository';
-import { users } from './user.schema';
+import { users } from './schemas/user.schema';
 
 function createMockDb() {
   const mockReturning = jest.fn();
@@ -68,7 +68,6 @@ describe('UserRepository', () => {
 
   describe('constructor', () => {
     it('should pass users table and users.id to base class', () => {
-      // Verify inherited methods work by calling findAll, which uses the table
       mocks.from.mockReturnValue([]);
       repository.findAll();
 
@@ -79,8 +78,9 @@ describe('UserRepository', () => {
       const user = {
         id: 'abc-123',
         email: 'alice@example.com',
-        username: 'alice',
-        passwordHash: 'hash',
+        displayName: 'Alice',
+        emailVerified: false,
+        status: 'active',
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -100,8 +100,9 @@ describe('UserRepository', () => {
       const user = {
         id: 'abc-123',
         email: 'alice@example.com',
-        username: 'alice',
-        passwordHash: 'hash',
+        displayName: 'Alice',
+        emailVerified: false,
+        status: 'active',
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -119,35 +120,6 @@ describe('UserRepository', () => {
       mocks.limit.mockReturnValue([]);
 
       const result = await repository.findByEmail('nonexistent@example.com');
-
-      expect(result).toBeUndefined();
-    });
-  });
-
-  describe('findByUsername', () => {
-    it('should delegate to findOne with eq(users.username, username)', async () => {
-      const user = {
-        id: 'abc-123',
-        email: 'alice@example.com',
-        username: 'alice',
-        passwordHash: 'hash',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      mocks.limit.mockReturnValue([user]);
-
-      const result = await repository.findByUsername('alice');
-
-      expect(mocks.select).toHaveBeenCalled();
-      expect(mocks.from).toHaveBeenCalledWith(users);
-      expect(mocks.limit).toHaveBeenCalledWith(1);
-      expect(result).toEqual(user);
-    });
-
-    it('should return undefined when no user matches', async () => {
-      mocks.limit.mockReturnValue([]);
-
-      const result = await repository.findByUsername('nonexistent');
 
       expect(result).toBeUndefined();
     });

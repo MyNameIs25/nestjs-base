@@ -108,7 +108,7 @@ All mutating methods use `.returning()` to return affected rows.
 
 ### 1. Define the Drizzle Schema
 
-Place schema files in the app's domain directory (e.g., `apps/auth/src/users/user.schema.ts`):
+Place schema files in the app's domain `schemas/` subdirectory (e.g., `apps/auth/src/users/schemas/user.schema.ts`):
 
 ```typescript
 import { pgTable, uuid, varchar, timestamp } from 'drizzle-orm/pg-core';
@@ -183,6 +183,111 @@ Do **not** export the schema from the barrel — only the repository and module.
   ],
 })
 export class AuthModule {}
+```
+
+## Transactions
+
+### TransactionManager
+
+Injectable service providing two transaction APIs:
+
+```typescript
+import { TransactionManager, withTransaction } from '@app/common';
+
+@Injectable()
+export class SomeService {
+  constructor(
+    private readonly txManager: TransactionManager,
+    private readonly userRepository: UserRepository,
+    private readonly orderRepository: OrderRepository,
+  ) {}
+}
+```
+
+#### Callback API (`run`) — simple cases
+
+```typescript
+await this.txManager.run(async (tx) => {
+  // tx is a NodePgDatabase bound to the transaction
+});
+```
+
+Automatically commits on success, rolls back on error. Cannot do work after commit (e.g., JWT signing outside the transaction).
+
+#### Manual API (`begin`) — when you need control
+
+```typescript
+const tx = await this.txManager.begin();
+try {
+  const [userRepo, orderRepo] = withTransaction(
+    tx.db,
+    this.userRepository,
+    this.orderRepository,
+  );
+
+  const user = await userRepo.create({ ... });
+  await orderRepo.create({ userId: user.id, ... });
+
+  await tx.commit();
+  // Do non-transactional work here (e.g., sign JWT)
+  return result;
+} catch (error) {
+  await tx.rollback();
+  throw error;
+}
+```
+
+- `tx.commit()` and `tx.rollback()` are idempotent — safe to call multiple times (guarded by `settled` flag)
+- The `PoolClient` is released automatically on commit or rollback
+
+### withTransaction Utility
+
+`withTransaction(tx.db, ...repos)` creates shallow clones of repositories with `db` replaced by the transaction connection:
+
+```typescript
+const [userRepo, orderRepo] = withTransaction(
+  tx.db,
+  this.userRepository,
+  this.orderRepository,
+);
+```
+
+- Each cloned repo uses the transaction connection for all queries
+- The original repositories are unaffected
+- Type-safe — returns the same tuple types as the input repos
+
+This works via `BaseRepository.withTransaction(tx)`:
+
+```typescript
+withTransaction(tx: NodePgDatabase): this {
+  const clone = Object.create(Object.getPrototypeOf(this));
+  Object.assign(clone, this);
+  clone.db = tx;  // Replace db with transaction connection
+  return clone;
+}
+```
+
+### Transaction Patterns
+
+**Do:** Move validation inside the transaction when it depends on data that could change concurrently:
+
+```typescript
+const tx = await this.txManager.begin();
+const [tokenRepo] = withTransaction(tx.db, this.tokenRepository);
+const token = await tokenRepo.findByHashForUpdate(hash); // SELECT ... FOR UPDATE
+if (token.revoked) { /* handle reuse */ }
+```
+
+**Do:** Perform non-DB work (JWT signing, external API calls) after `tx.commit()` to keep transactions short.
+
+**Don't:** Let transactional side effects get rolled back unintentionally. If a security action (like revoking all tokens) must persist even when the transaction fails, do it outside the transaction:
+
+```typescript
+if (existingToken.revoked) {
+  await tx.rollback();
+  await this.tokenRepository.revokeAllForUser(userId); // non-transactional
+  throw new AppException(AUTH_ERRORS.TOKEN_REUSE_DETECTED);
+}
 ```
 
 ## Database Config Schema

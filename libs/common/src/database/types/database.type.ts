@@ -15,6 +15,6 @@ export interface AppDatabaseAsyncOptions extends Pick<
 > {
   inject?: (InjectionToken | OptionalFactoryDependency)[];
   useFactory: (
-    ...args: any[]
+    ...args: unknown[]
   ) => AppDatabaseOptions | Promise<AppDatabaseOptions>;
 }
