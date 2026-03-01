@@ -159,7 +159,7 @@ describe('Auth Flow (e2e)', () => {
 
     const body = res.body as ErrorResponse;
     expect(body.success).toBe(false);
-    expect(body.code).toBe('B01006');
+    expect(body.code).toBe('A01006');
   });
 
   it('POST /auth/logout → succeeds', async () => {

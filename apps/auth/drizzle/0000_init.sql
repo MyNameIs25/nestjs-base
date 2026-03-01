@@ -1,3 +1,4 @@
+CREATE TYPE "public"."user_status" AS ENUM('active', 'suspended', 'deleted');--> statement-breakpoint
 CREATE TABLE "refresh_tokens" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -28,7 +29,7 @@ CREATE TABLE "users" (
 	"email" varchar(255) NOT NULL,
 	"display_name" varchar(100),
 	"email_verified" boolean DEFAULT false NOT NULL,
-	"status" varchar(20) DEFAULT 'active' NOT NULL,
+	"status" "user_status" DEFAULT 'active' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"deleted_at" timestamp with time zone,
