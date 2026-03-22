@@ -134,12 +134,12 @@ describe('LocalAuthService', () => {
       );
     });
 
-    it('should throw EMAIL_TAKEN when email exists', async () => {
+    it('should throw EMAIL_TAKEN when email exists and is verified', async () => {
       mockFindByEmail.mockResolvedValue({
         id: 'user-1',
         email: 'test@example.com',
         displayName: 'Test',
-        emailVerified: false,
+        emailVerified: true,
         status: 'active',
         createdAt: new Date(),
         updatedAt: new Date(),
