@@ -248,4 +248,51 @@ describe('BaseRepository', () => {
       expect(result).toBeUndefined();
     });
   });
+
+  describe('withTransaction', () => {
+    it('should return a clone that uses the provided tx instead of the original db', async () => {
+      const txMock = createMockDb();
+      const txRows = [{ id: 10, name: 'TxRow' }];
+      txMock.mocks.from.mockReturnValue(txRows);
+
+      const txRepo = repository.withTransaction(txMock.db);
+      const result = await txRepo.findAll();
+
+      expect(result).toEqual(txRows);
+      expect(txMock.mocks.select).toHaveBeenCalled();
+      expect(txMock.mocks.from).toHaveBeenCalledWith(testTable);
+    });
+
+    it('should not affect the original repository', async () => {
+      const txMock = createMockDb();
+      repository.withTransaction(txMock.db);
+
+      const originalRows = [{ id: 1, name: 'Original' }];
+      mocks.from.mockReturnValue(originalRows);
+
+      const result = await repository.findAll();
+
+      expect(result).toEqual(originalRows);
+      expect(mocks.select).toHaveBeenCalled();
+    });
+
+    it('should preserve the table and idColumn on the clone', async () => {
+      const txMock = createMockDb();
+      const row = { id: 5, name: 'Found' };
+      txMock.mocks.limit.mockReturnValue([row]);
+
+      const txRepo = repository.withTransaction(txMock.db);
+      const result = await txRepo.findById(5);
+
+      expect(txMock.mocks.from).toHaveBeenCalledWith(testTable);
+      expect(result).toEqual(row);
+    });
+
+    it('should return an instance of the same class', () => {
+      const txMock = createMockDb();
+      const txRepo = repository.withTransaction(txMock.db);
+
+      expect(txRepo).toBeInstanceOf(TestRepository);
+    });
+  });
 });

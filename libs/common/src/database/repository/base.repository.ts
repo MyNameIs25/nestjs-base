@@ -10,10 +10,17 @@ export abstract class BaseRepository<
   TInsert = InferInsertModel<TTable>,
 > {
   constructor(
-    protected readonly db: NodePgDatabase,
+    protected db: NodePgDatabase,
     protected readonly table: TTable,
     protected readonly idColumn: PgColumn,
   ) {}
+
+  withTransaction(tx: NodePgDatabase): this {
+    const clone = Object.create(Object.getPrototypeOf(this) as object) as this;
+    Object.assign(clone, this);
+    clone.db = tx;
+    return clone;
+  }
 
   async findAll(): Promise<TSelect[]> {
     return this.db.select().from(this.table as any) as unknown as Promise<
@@ -21,7 +28,7 @@ export abstract class BaseRepository<
     >;
   }
 
-  async findOne(where: SQL): Promise<TSelect | undefined> {
+  async findOne(where: SQL | undefined): Promise<TSelect | undefined> {
     const rows = await this.db
       .select()
       .from(this.table as any)
@@ -53,7 +60,10 @@ export abstract class BaseRepository<
       .returning() as Promise<TSelect[]>;
   }
 
-  async update(where: SQL, data: Partial<TInsert>): Promise<TSelect[]> {
+  async update(
+    where: SQL | undefined,
+    data: Partial<TInsert>,
+  ): Promise<TSelect[]> {
     return (this.db as any)
       .update(this.table)
       .set(data)
@@ -69,7 +79,7 @@ export abstract class BaseRepository<
     return rows[0];
   }
 
-  async delete(where: SQL): Promise<TSelect[]> {
+  async delete(where: SQL | undefined): Promise<TSelect[]> {
     return (this.db as any)
       .delete(this.table)
       .where(where)

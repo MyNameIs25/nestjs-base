@@ -6,4 +6,5 @@ ignoredBuiltDependencies:
   - nx
 
 onlyBuiltDependencies:
-  - '@nestjs/core'
+  - argon2
+  - esbuild

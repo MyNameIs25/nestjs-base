@@ -34,7 +34,7 @@ export class AppExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request & { id?: string }>();
     const response = ctx.getResponse<Response>();
 
-    const { errorCode, message, devMessage, status } =
+    const { errorCode, message, devMessage, errors, status } =
       this.handler.resolve(exception);
     const traceId = request.id ?? 'unknown';
 
@@ -52,11 +52,15 @@ export class AppExceptionFilter implements ExceptionFilter {
       body.devMessage = devMessage;
     }
 
+    if (errors && errors.length > 0) {
+      body.errors = errors;
+    }
+
     response.status(status).json(body);
   }
 
   private handleRpc(exception: unknown): Observable<never> {
-    const { errorCode, message, devMessage, status } =
+    const { errorCode, message, devMessage, errors, status } =
       this.handler.resolve(exception);
 
     this.handler.log(exception, errorCode, 'rpc');
@@ -69,6 +73,10 @@ export class AppExceptionFilter implements ExceptionFilter {
 
     if (!this.isProduction && devMessage) {
       payload.devMessage = devMessage;
+    }
+
+    if (errors && errors.length > 0) {
+      payload.errors = errors;
     }
 
     return throwError(() => payload);

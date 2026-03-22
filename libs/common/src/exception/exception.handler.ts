@@ -5,7 +5,11 @@ import { AppLogger } from '../logger/logger.service';
 import { AppException } from './exceptions/base.exception';
 import { COMMON_ERRORS, HTTP_STATUS_TO_ERROR } from './exception.constants';
 import { ERROR_SOURCE } from './exception.registry';
-import type { ErrorCodeDef, ResolvedError } from './types/exception.type';
+import type {
+  ErrorCodeDef,
+  ResolvedError,
+  ValidationError,
+} from './types/exception.type';
 
 @Injectable()
 export class ExceptionHandler {
@@ -29,26 +33,47 @@ export class ExceptionHandler {
     // Case 2: NestJS HttpExceptions (from guards, pipes, etc.)
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
-      const errorCode =
+      const defaultErrorCode =
         HTTP_STATUS_TO_ERROR.get(status) ?? COMMON_ERRORS.INTERNAL_SERVER_ERROR;
       const exceptionResponse = exception.getResponse();
 
       let devMessage: string | undefined;
+      let errors: ValidationError[] | undefined;
+
       if (typeof exceptionResponse === 'string') {
         devMessage = exceptionResponse;
       } else if (
         typeof exceptionResponse === 'object' &&
-        exceptionResponse !== null &&
-        'message' in exceptionResponse
+        exceptionResponse !== null
       ) {
-        const msg = (exceptionResponse as Record<string, unknown>).message;
-        devMessage = Array.isArray(msg) ? msg.join('; ') : String(msg);
+        const resp = exceptionResponse as Record<string, unknown>;
+
+        if (Array.isArray(resp.errors) && resp.errors.length > 0) {
+          errors = (resp.errors as Record<string, unknown>[]).map((err) => ({
+            field: Array.isArray(err.path)
+              ? err.path.map(String).join('.')
+              : 'unknown',
+            message:
+              typeof err.message === 'string'
+                ? err.message
+                : JSON.stringify(err),
+          }));
+          devMessage = errors.map((e) => `${e.field}: ${e.message}`).join('; ');
+        } else if ('message' in resp) {
+          const msg = resp.message;
+          devMessage = Array.isArray(msg) ? msg.join('; ') : String(msg);
+        }
       }
 
+      const errorCode = errors
+        ? { ...COMMON_ERRORS.VALIDATION_FAILED, httpStatus: status }
+        : { ...defaultErrorCode, httpStatus: status };
+
       return {
-        errorCode: { ...errorCode, httpStatus: status },
+        errorCode,
         message: errorCode.message,
         devMessage,
+        errors,
         status,
       };
     }

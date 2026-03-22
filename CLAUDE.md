@@ -21,6 +21,10 @@ pnpm test:e2e                             # E2E tests (all apps)
 pnpm graph                                # Open interactive dependency graph
 pnpm affected -t build                    # Build only affected projects
 pnpm affected -t test                     # Test only affected projects
+pnpm db-generate auth                     # Generate migration SQL from schema changes
+pnpm db-generate auth --name add-avatar   # Generate with a custom migration name
+pnpm db-migrate auth                      # Apply pending migrations to the database
+pnpm db-studio auth                       # Open Drizzle Studio GUI for visual inspection
 ```
 
 #### Module Boundary Tags
@@ -134,10 +138,22 @@ Import `AppMiddlewareModule` **before** `AppLoggerModule` so `req.id` is set bef
 - `database.module.ts` — `AppDatabaseModule.forRoot()` / `forRootAsync()` wraps Drizzle ORM with `node-postgres`. Global module — `@InjectDrizzle()` works everywhere.
 - `database.constants.ts` — `DRIZZLE` injection token (Symbol)
 - `database.decorator.ts` — `@InjectDrizzle()` parameter decorator
-- `repository/base.repository.ts` — `BaseRepository<TTable>` abstract class with generic CRUD: `findAll`, `findOne`, `findById`, `create`, `createMany`, `update`, `updateById`, `delete`, `deleteById`. All mutating methods use `.returning()`.
+- `repository/base.repository.ts` — `BaseRepository<TTable>` abstract class with generic CRUD: `findAll`, `findOne`, `findById`, `create`, `createMany`, `update`, `updateById`, `delete`, `deleteById`. All mutating methods use `.returning()`. Supports `withTransaction(tx)` to create a transactional clone.
+- `transaction/transaction.manager.ts` — `TransactionManager` injectable service: `run(callback)` for simple auto-commit/rollback, `begin()` for manual control with `ManagedTransaction` (commit/rollback are idempotent).
+- `transaction/with-transaction.util.ts` — `withTransaction(tx.db, ...repos)` creates transactional clones of multiple repositories in one call.
 - `types/database.type.ts` — `DrizzleDB`, `AppDatabaseOptions`, `AppDatabaseAsyncOptions` types
 
-Schema files live in app-level domain directories (e.g., `apps/auth/src/users/user.schema.ts`), not in the common lib. Each domain gets its own module encapsulating the repository. See `apps/auth/src/users/` for reference and `.claude/rules/database.md` for detailed patterns.
+Schema files live in app-level domain `schemas/` subdirectories (e.g., `apps/auth/src/users/schemas/user.schema.ts`), not in the common lib. Each app has a barrel file (`apps/{name}/src/schemas.ts`) that re-exports all schemas for drizzle-kit. Each domain gets its own module encapsulating the repository. See `apps/auth/src/users/` for reference and `.claude/rules/database.md` for detailed patterns.
+
+#### Migration (`docker/migrate-with-lock.mjs`)
+
+- `docker/migrate-with-lock.mjs` — Node.js script that wraps `drizzle-kit migrate` with PostgreSQL advisory lock, auto-creates the app database if it doesn't exist, and retries connections until PostgreSQL is ready.
+- `docker/entrypoint.sh` — Container entrypoint that calls `migrate-with-lock.mjs` before starting the application.
+- `apps/{name}/drizzle/` — Generated migration SQL files and `meta/` snapshots (must be committed to git).
+- `apps/{name}/drizzle.config.ts` — Per-app drizzle-kit configuration.
+- `apps/{name}/src/schemas.ts` — Barrel file re-exporting all Drizzle schemas for drizzle-kit to read.
+
+Migrations use a forward-only strategy (no rollback). See `.claude/rules/migration.md` for detailed patterns.
 
 ### Configuration
 
@@ -154,11 +170,13 @@ Schema files live in app-level domain directories (e.g., `apps/auth/src/users/us
 
 ### Docker
 
-- `Dockerfile` — 2-stage multi-stage build (development → production)
+- `Dockerfile` — 2-stage multi-stage build (development → production). `ENV APP_NAME` is set from the build ARG so the entrypoint can reference it at runtime.
 - `docker-compose.yml` — Modular compose using `include` for per-app overrides and shared storage (postgres)
 - `docker/base.yml` — Shared service definition (build context, dev command, volume mounts)
 - `docker/<app>/compose.override.yml` — Per-app service extending base with port mappings
 - `docker/storage/postgres.yml` — PostgreSQL service
+- `docker/entrypoint.sh` — Container entrypoint: runs migration script (if drizzle config exists) then `exec "$@"`
+- `docker/migrate-with-lock.mjs` — Migration runner with advisory lock, auto database creation, and connection retry
 - `.dockerignore` — Excludes node_modules, dist, .git, .nx, etc.
 - `Makefile` — Convenience targets for Docker commands
 

@@ -32,6 +32,7 @@ export default tseslint.config(
         'error',
         {
           enforceBuildableLibDependency: true,
+          allowCircularSelfDependency: true,
           allow: [],
           depConstraints: [
             {

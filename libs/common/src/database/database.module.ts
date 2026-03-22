@@ -6,13 +6,12 @@ import {
 } from '@nestjs/common';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool, PoolConfig } from 'pg';
-import { DRIZZLE } from './database.constants';
+import { DRIZZLE, PG_POOL } from './database.constants';
+import { TransactionManager } from './transaction/transaction.manager';
 import type {
   AppDatabaseAsyncOptions,
   AppDatabaseOptions,
 } from './types/database.type';
-
-const PG_POOL = Symbol('PG_POOL');
 
 const DEFAULT_POOL_CONFIG: Partial<PoolConfig> = {
   max: 20,
@@ -43,8 +42,9 @@ export class AppDatabaseModule implements OnApplicationShutdown {
           useFactory: (pool: Pool) => drizzle({ client: pool }),
           inject: [PG_POOL],
         },
+        TransactionManager,
       ],
-      exports: [DRIZZLE],
+      exports: [DRIZZLE, PG_POOL, TransactionManager],
     };
   }
 
@@ -56,7 +56,7 @@ export class AppDatabaseModule implements OnApplicationShutdown {
       providers: [
         {
           provide: PG_POOL,
-          useFactory: async (...args: any[]) => {
+          useFactory: async (...args: unknown[]) => {
             const config = await options.useFactory(...args);
             return new Pool({ ...DEFAULT_POOL_CONFIG, ...config.pool });
           },
@@ -67,8 +67,9 @@ export class AppDatabaseModule implements OnApplicationShutdown {
           useFactory: (pool: Pool) => drizzle({ client: pool }),
           inject: [PG_POOL],
         },
+        TransactionManager,
       ],
-      exports: [DRIZZLE],
+      exports: [DRIZZLE, PG_POOL, TransactionManager],
     };
   }
 }

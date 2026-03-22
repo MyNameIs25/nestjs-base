@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ThrottlerModule } from '@nestjs/throttler';
 import {
   AppDatabaseModule,
   AppExceptionModule,
@@ -7,9 +8,8 @@ import {
   AppMiddlewareModule,
 } from '@app/common';
 import { AuthConfigModule, AuthConfigService } from './config';
+import { CoreModule } from './core';
 import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
-import { UsersModule } from './users';
 
 @Module({
   imports: [
@@ -18,6 +18,10 @@ import { UsersModule } from './users';
     AppLoggerModule.forRoot(),
     AppExceptionModule,
     AppInterceptorModule,
+    ThrottlerModule.forRoot([
+      { name: 'short', ttl: 60_000, limit: 5 },
+      { name: 'long', ttl: 600_000, limit: 20 },
+    ]),
     AppDatabaseModule.forRootAsync({
       imports: [AuthConfigModule],
       inject: [AuthConfigService],
@@ -31,9 +35,8 @@ import { UsersModule } from './users';
         },
       }),
     }),
-    UsersModule,
+    CoreModule.register({ localEnabled: true }),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
 })
 export class AuthModule {}

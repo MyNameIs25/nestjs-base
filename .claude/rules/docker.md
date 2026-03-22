@@ -77,6 +77,22 @@ When adding a new service, choose a port that doesn't conflict with existing ser
 - `make down` — stop all services
 - `make logs` — interactive log viewer (pick a service or view all)
 
+## Database Migrations
+
+The container entrypoint (`docker/entrypoint.sh`) automatically runs migrations via `docker/migrate-with-lock.mjs` before starting the application. The script:
+
+1. Waits for PostgreSQL to be ready (retry with backoff)
+2. Creates the app database if it doesn't exist
+3. Acquires a `pg_advisory_lock` (lock ID derived from `APP_NAME`)
+4. Runs `drizzle-kit migrate`
+5. Releases the lock
+
+`APP_NAME` is set as both a build `ARG` and runtime `ENV` in the Dockerfile. Both `docker/entrypoint.sh` and `docker/migrate-with-lock.mjs` must be `COPY`'d in both Dockerfile stages.
+
+Migration files (`apps/{name}/drizzle/`) are **not** volume-mounted in development, so `make build` is required after generating new migrations.
+
+See `.claude/rules/migration.md` for the full migration workflow.
+
 ## .dockerignore
 
 The `.dockerignore` excludes `node_modules`, `dist`, `.git`, `.husky`, `.claude`, `coverage`, `.env*`, markdown files, and IDE directories. Keep it updated when adding new non-runtime directories.

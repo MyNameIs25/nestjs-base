@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { AuthModule } from './../src/auth.module';
 
 describe('AuthController (e2e)', () => {
@@ -15,12 +16,17 @@ describe('AuthController (e2e)', () => {
     process.env.DB_NAME = 'auth_db';
     process.env.DB_USER = 'postgres';
     process.env.DB_PASSWORD = 'postgres';
+    process.env.JWT_SECRET =
+      'super-secret-key-change-in-production-min-32-chars';
+    process.env.JWT_ACCESS_EXPIRY = '15m';
+    process.env.JWT_REFRESH_EXPIRY = '7d';
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AuthModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(new ZodValidationPipe());
     await app.init();
   });
 
@@ -28,15 +34,15 @@ describe('AuthController (e2e)', () => {
     await app.close();
   });
 
-  it('/ (GET) should return success envelope', () => {
+  it('/auth/health (GET) should return success envelope', () => {
     return request(app.getHttpServer())
-      .get('/')
+      .get('/auth/health')
       .expect(200)
       .expect((res) => {
         const body = res.body as Record<string, unknown>;
         expect(body).toMatchObject({
           success: true,
-          data: 'Hello from auth!',
+          data: { status: 'ok' },
         });
         expect(body.timestamp).toBeDefined();
         expect(body.traceId).toBeDefined();
@@ -58,54 +64,11 @@ describe('AuthController (e2e)', () => {
       });
   });
 
-  it('/error/biz (GET) should return user error with AUTH error code', () => {
-    return request(app.getHttpServer())
-      .get('/error/biz')
-      .expect(409)
-      .expect((res) => {
-        const body = res.body as Record<string, unknown>;
-        expect(body).toMatchObject({
-          success: false,
-          code: 'A01001',
-          message: 'Username "john" already exists',
-        });
-      });
-  });
-
-  it('/error/sys (GET) should return system error with devMessage', () => {
-    return request(app.getHttpServer())
-      .get('/error/sys')
-      .expect(500)
-      .expect((res) => {
-        const body = res.body as Record<string, unknown>;
-        expect(body).toMatchObject({
-          success: false,
-          code: 'B01001',
-          message: 'Auth service unavailable',
-          devMessage: 'Redis connection refused on port 6379',
-        });
-      });
-  });
-
-  it('/error/not-found (GET) should return common NOT_FOUND', () => {
-    return request(app.getHttpServer())
-      .get('/error/not-found')
-      .expect(404)
-      .expect((res) => {
-        const body = res.body as Record<string, unknown>;
-        expect(body).toMatchObject({
-          success: false,
-          code: 'A00004',
-          message: 'Not found',
-        });
-      });
-  });
-
-  it('/ (GET) should return X-Request-Id header with valid UUID', () => {
+  it('/auth/health (GET) should return X-Request-Id header with valid UUID', () => {
     const uuidRegex =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
     return request(app.getHttpServer())
-      .get('/')
+      .get('/auth/health')
       .expect(200)
       .expect((res) => {
         const header = res.headers['x-request-id'];
@@ -115,9 +78,9 @@ describe('AuthController (e2e)', () => {
       });
   });
 
-  it('/ (GET) should echo client-provided x-request-id', () => {
+  it('/auth/health (GET) should echo client-provided x-request-id', () => {
     return request(app.getHttpServer())
-      .get('/')
+      .get('/auth/health')
       .set('x-request-id', 'my-trace-123')
       .expect(200)
       .expect((res) => {
@@ -125,5 +88,33 @@ describe('AuthController (e2e)', () => {
         const body = res.body as Record<string, unknown>;
         expect(body.traceId).toBe('my-trace-123');
       });
+  });
+
+  it('POST /auth/local/register should reject invalid payload', () => {
+    return request(app.getHttpServer())
+      .post('/auth/local/register')
+      .send({ email: 'not-an-email', password: '123' })
+      .expect(400);
+  });
+
+  it('POST /auth/local/login should reject empty password', () => {
+    return request(app.getHttpServer())
+      .post('/auth/local/login')
+      .send({ email: 'test@example.com', password: '' })
+      .expect(400);
+  });
+
+  it('POST /auth/refresh should reject empty refreshToken', () => {
+    return request(app.getHttpServer())
+      .post('/auth/refresh')
+      .send({ refreshToken: '' })
+      .expect(400);
+  });
+
+  it('POST /auth/logout should reject request without Bearer token', () => {
+    return request(app.getHttpServer())
+      .post('/auth/logout')
+      .send({ refreshToken: 'some-token' })
+      .expect(401);
   });
 });

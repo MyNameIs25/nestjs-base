@@ -197,6 +197,147 @@ AppDatabaseModule.forRootAsync({
 - **No runtime schema sync** — Unlike TypeORM's `synchronize`, you must run migrations explicitly. This is intentional for production safety.
 - **Younger ecosystem** — Fewer community plugins and adapters compared to TypeORM or Prisma.
 
+## Transaction Support
+
+Manual transaction management via `TransactionManager` and `withTransaction` utility (`libs/common/src/database/transaction/`).
+
+### Design
+
+`BaseRepository.withTransaction(tx)` creates a **shallow clone** of the repository with `db` replaced by the transaction connection. The original repository is unaffected. `withTransaction(tx.db, ...repos)` is a convenience wrapper that clones multiple repositories at once.
+
+```typescript
+const tx = await this.txManager.begin();
+try {
+  const [userRepo, orderRepo] = withTransaction(tx.db, this.userRepository, this.orderRepository);
+  const user = await userRepo.create({ ... });
+  await orderRepo.create({ userId: user.id, ... });
+  await tx.commit();
+  // Non-transactional work (JWT signing, etc.) goes here
+} catch (error) {
+  await tx.rollback();
+  throw error;
+}
+```
+
+Two APIs: `run(callback)` for simple auto-commit/rollback cases, and `begin()` for manual control when you need to do work after commit or handle rollback-safe side effects.
+
+### Pros
+
+- **Repository-transparent** — Same repository methods work inside and outside transactions; only the underlying `db` connection changes
+- **Type-safe** — `withTransaction` preserves repository tuple types
+- **Idempotent lifecycle** — `commit()` and `rollback()` are guarded by a `settled` flag; safe to call multiple times
+
+### Cons
+
+- **Shallow clone overhead** — Each `withTransaction` call creates cloned repository instances via `Object.create` + `Object.assign`
+- **Manual lifecycle** — `begin()` requires explicit `commit()`/`rollback()` in try/catch; forgetting either leaks the pool client
+
+## Migration
+
+Forward-only migration system using **drizzle-kit** with a custom Node.js runner (`docker/migrate-with-lock.mjs`) for safe multi-instance deployments.
+
+### Workflow
+
+```bash
+# 1. Modify schema files (e.g., apps/auth/src/users/schemas/user.schema.ts)
+# 2. Generate migration SQL
+pnpm db-generate auth --name add-user-avatar
+# 3. Review generated SQL in apps/auth/drizzle/
+# 4. Apply to local database
+pnpm db-migrate auth
+```
+
+In Docker, migrations run automatically on container startup via `docker/entrypoint.sh`.
+
+### migrate-with-lock.mjs
+
+The migration runner handles three production concerns:
+
+1. **Connection retry** — Retries connecting to PostgreSQL up to 10 times (3s intervals) for container startup ordering
+2. **Auto database creation** — Connects to the default `postgres` database and creates the app database if it doesn't exist
+3. **Advisory lock** — Acquires `pg_advisory_lock` (lock ID derived from `APP_NAME`) to prevent concurrent migrations across multiple instances
+
+Uses the existing `pg` package — no additional dependencies.
+
+### Pros
+
+- **Zero-touch deployment** — Database creation + migration runs automatically on container startup
+- **Concurrency-safe** — Advisory lock prevents race conditions in multi-instance deployments
+- **No extra dependencies** — Uses the existing `pg` package for locking instead of requiring `psql` or external tools
+- **Per-app isolation** — Each app has its own database, migration files, and lock ID
+
+### Cons
+
+- **Forward-only** — Drizzle has no automatic rollback; fix issues by writing a new migration
+- **Rebuild required** — Migration files are baked into the Docker image, not volume-mounted; `make build` needed after generating new migrations
+
+## Basic Email Auth
+
+Email/password authentication with **JWT access tokens** and **refresh token rotation** (`apps/auth/src/`).
+
+### Architecture
+
+```
+auth/
+├── auth.controller.ts          — Shared endpoints: POST /auth/refresh, POST /auth/logout, GET /auth/health
+├── core/
+│   ├── strategies/local/
+│   │   ├── local-auth.controller.ts  — POST /auth/local/register, POST /auth/local/login
+│   │   └── local-auth.service.ts     — Registration, login, credential validation
+│   ├── guards/jwt-auth.guard.ts      — Transport-aware JWT verification
+│   └── decorators/current-user.decorator.ts — @CurrentUser() extracts JWT payload
+├── tokens/
+│   ├── token.service.ts        — JWT signing, refresh token rotation with FOR UPDATE locking
+│   └── token.repository.ts     — Refresh token CRUD, revocation, expiry cleanup
+├── users/
+│   ├── schemas/user.schema.ts  — Users table with status (active/suspended/deleted) and soft delete
+│   └── user.repository.ts      — User CRUD, findByEmail
+└── auth-methods/
+    ├── schemas/user-auth-method.schema.ts — Provider-agnostic auth methods (local, OAuth, etc.)
+    └── auth-method.repository.ts          — Auth method CRUD, findByUserAndProvider
+```
+
+### Token Flow
+
+1. **Register/Login** → Returns `{ accessToken, refreshToken }`
+2. **Access API** → Send `Authorization: Bearer <accessToken>`, validated by `JwtAuthGuard`
+3. **Refresh** → Send expired refresh token → get new token pair (old token revoked)
+4. **Token reuse detection** — If a revoked refresh token is used, all user sessions are revoked (security event logged at `error` level)
+
+Refresh tokens use `SELECT ... FOR UPDATE` inside a transaction to prevent TOCTOU race conditions.
+
+### Security
+
+- **Argon2** password hashing with timing-safe comparison
+- **SHA-256** hashed refresh tokens stored in database (raw tokens never persisted)
+- **Refresh token rotation** — Each refresh invalidates the old token and issues a new one
+- **Token reuse detection** — Reuse of a revoked token triggers full session revocation
+- **Soft delete** — Users have `deleted_at` timestamp and `status` field for account lifecycle management
+
+### Controller Split
+
+Endpoints are split by scope:
+
+| Controller | Path | Endpoints | Auth |
+|------------|------|-----------|------|
+| `AuthController` | `/auth` | refresh, logout, health | JWT (logout) |
+| `LocalAuthController` | `/auth/local` | register, login | None |
+
+This separation allows adding new auth strategies (OAuth, SAML) as additional controllers without modifying shared endpoints.
+
+### Pros
+
+- **Strategy pattern** — `IAuthStrategy` interface allows adding OAuth/SAML providers alongside local auth
+- **Provider-agnostic schema** — `user_auth_methods` table supports multiple auth providers per user
+- **Secure token rotation** — Row-level locking prevents concurrent refresh race conditions
+- **Transport-aware guard** — `JwtAuthGuard` auto-detects HTTP, RPC, and GraphQL contexts
+
+### Cons
+
+- **No email verification flow** — `emailVerified` field exists but no verification endpoint yet
+- **No rate limiting on auth endpoints** — Throttler module is imported but not configured per-route
+- **Access tokens are stateless** — Cannot be revoked before expiry; mitigated by short expiry (15m default)
+
 ## Interceptor Module
 
 Global response interceptor that wraps successful responses in a uniform envelope (`libs/common/src/interceptor/`).
@@ -272,7 +413,9 @@ Single parameterized `Dockerfile` (2-stage: development + production) with compo
    ```
 7. Create `docker/<name>/.env.docker` and `docker/<name>/compose.override.yml`
 8. Register in `docker-compose.yml` include list
-9. `make build && make up`
+9. Create schema files in `apps/<name>/src/{domain}/schemas/`, barrel file at `apps/<name>/src/schemas.ts`, and `apps/<name>/drizzle.config.ts`
+10. Run `pnpm db-generate <name> --name init` to generate initial migration
+11. `make build && make up`
 
 ## Development
 
@@ -285,4 +428,7 @@ pnpm format                                  # Prettier
 pnpm test                                    # Unit tests
 pnpm test:e2e                                # E2E tests
 pnpm affected -t test                        # Test only affected projects
+pnpm db-generate <app-name> --name desc      # Generate migration SQL from schema changes
+pnpm db-migrate <app-name>                   # Apply pending migrations
+pnpm db-studio <app-name>                    # Open Drizzle Studio GUI
 ```
