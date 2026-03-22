@@ -1,0 +1,17 @@
+services:
+  email:
+    extends:
+      file: docker/base.yml
+      service: app
+    build:
+      args:
+        APP_NAME: email
+    container_name: email
+    command: pnpm -w run serve email
+    depends_on: []
+    env_file:
+      - apps/email/.env
+    volumes:
+      - ${PWD}/apps/email/src:/usr/src/app/apps/email/src
+    ports:
+      - '50051:50051'

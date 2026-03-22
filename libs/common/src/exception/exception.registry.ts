@@ -8,4 +8,5 @@ export const ERROR_DOMAINS = {
   COMMON: '00',
   AUTH: '01',
   PAYMENTS: '02',
+  EMAIL: '03',
 } as const;

@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { COMMON_ERRORS, TransactionManager } from '@app/common';
+import { AppLogger, COMMON_ERRORS, TransactionManager } from '@app/common';
 import { LocalAuthService } from './local-auth.service';
 import { UserRepository } from '@auth/users';
 import { AuthMethodRepository } from '@auth/auth-methods';
 import { TokenService } from '@auth/tokens';
+import { AuthEmailService } from '@auth/emails';
 import { AUTH_ERRORS } from '@auth/errors';
 import { hashPassword } from '../../utils/password.util';
 
@@ -73,6 +74,24 @@ describe('LocalAuthService', () => {
         {
           provide: TransactionManager,
           useValue: { begin: mockTxBegin },
+        },
+        {
+          provide: AuthEmailService,
+          useValue: {
+            sendWelcome: jest.fn().mockResolvedValue({
+              success: true,
+              messageId: 'msg_1',
+              errorMessage: '',
+            }),
+          },
+        },
+        {
+          provide: AppLogger,
+          useValue: {
+            log: jest.fn(),
+            error: jest.fn(),
+            warn: jest.fn(),
+          },
         },
       ],
     }).compile();

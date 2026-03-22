@@ -6,3 +6,4 @@ export * from './logger';
 export * from './middleware';
 export * from './swagger';
 export * from './constants';
+export * from './email-client';

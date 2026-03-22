@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   AppException,
+  AppLogger,
   COMMON_ERRORS,
   TransactionManager,
   withTransaction,
@@ -8,6 +9,7 @@ import {
 import { UserRepository, USER_STATUS } from '@auth/users';
 import { AuthMethodRepository } from '@auth/auth-methods';
 import { TokenService, TokenPair, TokenMetadata } from '@auth/tokens';
+import { AuthEmailService } from '@auth/emails';
 import { AUTH_ERRORS } from '@auth/errors';
 import { hashPassword, verifyPassword } from '../../utils/password.util';
 import type {
@@ -26,6 +28,8 @@ export class LocalAuthService implements IAuthStrategy {
     private readonly authMethodRepository: AuthMethodRepository,
     private readonly tokenService: TokenService,
     private readonly txManager: TransactionManager,
+    private readonly authEmailService: AuthEmailService,
+    private readonly logger: AppLogger,
   ) {}
 
   async authenticate(credentials: unknown): Promise<AuthResult> {
@@ -72,6 +76,17 @@ export class LocalAuthService implements IAuthStrategy {
       });
 
       await tx.commit();
+
+      const displayName = user.displayName ?? user.email.split('@')[0];
+      this.authEmailService
+        .sendWelcome(user.email, displayName)
+        .catch((err) => {
+          this.logger.error(
+            `Failed to send welcome email to=${user.email}: ${err instanceof Error ? err.message : String(err)}`,
+            'LocalAuthService',
+          );
+        });
+
       return this.tokenService.generateTokenPair(user.id, user.email, metadata);
     } catch (error) {
       await tx.rollback();

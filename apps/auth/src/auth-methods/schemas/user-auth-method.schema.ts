@@ -27,7 +27,8 @@ export const userAuthMethods = pgTable(
       .notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .defaultNow()
-      .notNull(),
+      .notNull()
+      .$onUpdate(() => new Date()),
   },
   (t) => [
     unique('uq_user_provider').on(t.userId, t.provider),

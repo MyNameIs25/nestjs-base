@@ -6,81 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 NestJS 11 monorepo using TypeScript, Express platform, pnpm workspaces, and Nx for task orchestration/caching. Multiple apps share common libraries to compare different library implementations (logging, error handling, config, etc.).
 
-## Commands
-
-```bash
-pnpm install                              # Install dependencies (all workspaces)
-pnpm build                                # Build all projects (cached)
-pnpm serve auth                           # Dev server (auth) with watch mode
-pnpm serve auth --configuration=debug     # Debug server (auth) with watch mode
-pnpm lint                                 # ESLint all projects
-pnpm format                               # Prettier format apps/ and libs/
-pnpm test                                 # Unit tests (Jest, files matching *.spec.ts)
-pnpm test:cov                             # Unit tests with coverage report
-pnpm test:e2e                             # E2E tests (all apps)
-pnpm graph                                # Open interactive dependency graph
-pnpm affected -t build                    # Build only affected projects
-pnpm affected -t test                     # Test only affected projects
-pnpm db-generate auth                     # Generate migration SQL from schema changes
-pnpm db-generate auth --name add-avatar   # Generate with a custom migration name
-pnpm db-migrate auth                      # Apply pending migrations to the database
-pnpm db-studio auth                       # Open Drizzle Studio GUI for visual inspection
-```
-
-#### Module Boundary Tags
-
-Projects are tagged for dependency enforcement via `@nx/enforce-module-boundaries`:
-
-| Tag | Projects | Can depend on |
-|-----|----------|---------------|
-| `scope:auth` | auth | `scope:shared`, `scope:auth` |
-| `scope:payments` | payments | `scope:shared`, `scope:payments` |
-| `scope:shared` | common | — |
-| `type:app` | auth, payments | `type:lib` |
-| `type:lib` | common | — |
-
-When adding a new app, add a `scope:<name>` depConstraint in `eslint.config.mjs`.
-
-### Docker Commands
-
-```bash
-make build                          # Build dev Docker image
-make up                             # Start dev container (hot reload)
-make down                           # Stop dev container
-make logs                           # Tail dev container logs
-docker build --target production .  # Build production image
-```
-
-### CI
-
-GitHub Actions workflow (`.github/workflows/ci.yml`) runs on pushes to `main` and PRs:
-- Format check (Prettier)
-- Lint, build, unit tests, E2E tests (via `nx affected`)
-
-## Architecture
-
-NestJS monorepo (`nest-cli.json` with `monorepo: true`) using pnpm workspaces for dependency isolation and Nx for build orchestration, caching, and module boundary enforcement.
-
-### Apps (`apps/`)
-
-- **auth** (default) — Auth-focused app for comparing auth library implementations
-  - `apps/auth/src/main.ts` — Bootstrap entry point
-  - `apps/auth/src/auth.module.ts` — Root module
-  - `apps/auth/src/auth.controller.ts` + `auth.service.ts` — Default controller/service pair
-  - `apps/auth/src/errors.ts` — Auth-specific error codes (domain `01`)
-  - `apps/auth/src/config/` — Auth-specific config module, service, and schemas
-  - `apps/auth/src/users/` — Users domain: Drizzle schema (`user.schema.ts`), repository (`user.repository.ts`), module (`users.module.ts`)
-  - `apps/auth/test/` — E2E tests
-  - `apps/auth/package.json` — App-level runtime dependencies
-  - `apps/auth/project.json` — Nx project config and targets
-- **payments** — Payments service (port 3001)
-  - `apps/payments/src/main.ts` — Bootstrap entry point
-  - `apps/payments/src/payments.module.ts` — Root module
-  - `apps/payments/src/payments.controller.ts` + `payments.service.ts` — Default controller/service pair
-  - `apps/payments/test/` — E2E tests
-  - `apps/payments/package.json` — App-level runtime dependencies
-  - `apps/payments/project.json` — Nx project config and targets
-
 ### Libraries (`libs/`)
 
 - **common** (`@app/common`) — Shared utilities and modules used across apps
@@ -143,6 +68,24 @@ Import `AppMiddlewareModule` **before** `AppLoggerModule` so `req.id` is set bef
 - `transaction/with-transaction.util.ts` — `withTransaction(tx.db, ...repos)` creates transactional clones of multiple repositories in one call.
 - `types/database.type.ts` — `DrizzleDB`, `AppDatabaseOptions`, `AppDatabaseAsyncOptions` types
 
+#### Email Client Module (`libs/common/src/email-client/`)
+
+- `email-client.module.ts` — `EmailClientModule.forRoot()` / `forRootAsync()` wraps gRPC client for the email microservice
+- `email-client.service.ts` — `EmailClientService` with convenience methods: `sendVerificationCode()`, `sendPasswordReset()`, `sendWelcome()`
+- `constants.ts` — `EMAIL_SERVICE_TOKEN`, `EMAIL_PACKAGE_NAME`
+- `interfaces/email-service.interface.ts` — Re-exports types from `@proto/email` (generated by ts-proto)
+- `types/email-client.type.ts` — `EmailClientOptions`, `EmailClientAsyncOptions`
+
+Any app can send emails by importing `EmailClientModule` and injecting `EmailClientService`. The proto path is resolved internally via `process.cwd()` — consumers only provide `{ url }`. See `.claude/rules/email.md` for detailed patterns.
+
+### Proto / gRPC Codegen (`proto/`)
+
+- `proto/email.proto` — gRPC service definition for the email microservice
+- `proto/generated/email.ts` — TypeScript types generated by `ts-proto` (committed to git). Re-run `pnpm proto:generate` after modifying `.proto` files.
+- Path alias `@proto/*` maps to `proto/generated/*` in `tsconfig.json`
+- `ts-proto` options: `nestJs=true` (generates `@EmailServiceControllerMethods()` decorator + `EmailServiceController` interface), `outputServices=grpc-js`, `snakeToCamel=true`
+- Generated files are committed to avoid requiring `protoc` in CI
+
 Schema files live in app-level domain `schemas/` subdirectories (e.g., `apps/auth/src/users/schemas/user.schema.ts`), not in the common lib. Each app has a barrel file (`apps/{name}/src/schemas.ts`) that re-exports all schemas for drizzle-kit. Each domain gets its own module encapsulating the repository. See `apps/auth/src/users/` for reference and `.claude/rules/database.md` for detailed patterns.
 
 #### Migration (`docker/migrate-with-lock.mjs`)
@@ -199,5 +142,5 @@ Pre-commit hook (via husky + lint-staged) runs `eslint --fix` and `prettier --wr
 - Target: `ES2023`
 - `strictNullChecks` enabled, `noImplicitAny` enabled
 - Decorators: `emitDecoratorMetadata` + `experimentalDecorators` enabled
-- Path aliases: `@app/common` → `libs/common/src`
+- Path aliases: `@app/common` → `libs/common/src`, `@email/*` → `apps/email/src/*`, `@proto/*` → `proto/generated/*`
 - Per-app build configs exclude `node_modules`, `dist`, `test`, and `*.spec.ts` files

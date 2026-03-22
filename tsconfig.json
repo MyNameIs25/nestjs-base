@@ -29,6 +29,9 @@
       ],
       "@auth/*": [
         "apps/auth/src/*"
+      ],
+      "@email/*": [
+        "apps/email/src/*"
       ]
     }
   }

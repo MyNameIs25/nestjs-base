@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthConfigService } from './config.service';
 import { databaseConfig } from './schemas/database.config';
+import { emailConfig } from './schemas/email.config';
 import { jwtConfig } from './schemas/jwt.config';
 import { securityConfig } from './schemas/security.config';
 import { AppConfigModule } from '@app/common';
@@ -8,7 +9,7 @@ import { AppConfigModule } from '@app/common';
 @Module({
   imports: [
     AppConfigModule.forRoot({
-      namespaces: [databaseConfig, jwtConfig, securityConfig],
+      namespaces: [databaseConfig, emailConfig, jwtConfig, securityConfig],
     }),
   ],
   providers: [AuthConfigService],
