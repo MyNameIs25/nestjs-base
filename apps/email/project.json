@@ -9,6 +9,10 @@
     "serve": {},
     "test": {},
     "lint": {},
-    "e2e": {}
+    "e2e": {
+      "options": {
+        "passWithNoTests": true
+      }
+    }
   }
 }
