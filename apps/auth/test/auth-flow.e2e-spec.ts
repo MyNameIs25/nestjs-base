@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import { eq } from 'drizzle-orm';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { DRIZZLE } from '@app/common/database/database.constants';
@@ -88,8 +89,12 @@ describe('Auth Flow (e2e)', () => {
     expect(body.data.refreshToken).toBeDefined();
   });
 
-  it('POST /auth/local/register → duplicate email returns 409', async () => {
+  it('POST /auth/local/register → duplicate verified email returns 409', async () => {
     await registerUser();
+    await db
+      .update(users)
+      .set({ emailVerified: true })
+      .where(eq(users.email, testEmail));
 
     const res = await request(app.getHttpServer())
       .post('/auth/local/register')
