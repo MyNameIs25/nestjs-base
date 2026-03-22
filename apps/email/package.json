@@ -1,0 +1,9 @@
+{
+  "name": "email",
+  "version": "0.0.1",
+  "private": true,
+  "dependencies": {
+    "resend": "^4.0.0"
+  },
+  "devDependencies": {}
+}

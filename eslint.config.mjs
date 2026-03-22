@@ -44,6 +44,10 @@ export default tseslint.config(
               onlyDependOnLibsWithTags: ['scope:shared', 'scope:payments'],
             },
             {
+              sourceTag: 'scope:email',
+              onlyDependOnLibsWithTags: ['scope:shared', 'scope:email'],
+            },
+            {
               sourceTag: 'type:app',
               onlyDependOnLibsWithTags: ['type:lib'],
             },

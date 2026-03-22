@@ -3,5 +3,16 @@ services:
     extends:
       file: docker/base.yml
       service: app
+    build:
+      args:
+        APP_NAME: auth
+    container_name: auth
+    command: pnpm -w run serve auth
+    depends_on:
+      - email
+    env_file:
+      - apps/auth/.env
+    volumes:
+      - ${PWD}/apps/auth/src:/usr/src/app/apps/auth/src
     ports:
       - '3000:3000'

@@ -11,7 +11,8 @@
     ],
     "sharedGlobals": [
       "{workspaceRoot}/tsconfig.json",
-      "{workspaceRoot}/nest-cli.json"
+      "{workspaceRoot}/nest-cli.json",
+      "{workspaceRoot}/proto/**/*"
     ]
   },
   "targetDefaults": {

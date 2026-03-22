@@ -3,5 +3,14 @@ services:
     extends:
       file: docker/base.yml
       service: app
+    build:
+      args:
+        APP_NAME: payments
+    container_name: payments
+    command: pnpm -w run serve payments
+    env_file:
+      - apps/payments/.env
+    volumes:
+      - ${PWD}/apps/payments/src:/usr/src/app/apps/payments/src
     ports:
       - '3001:3001'

@@ -19,6 +19,7 @@ RUN npm install -g pnpm
 
 RUN pnpm install --frozen-lockfile
 
+COPY proto proto
 COPY apps/${APP_NAME} apps/${APP_NAME}
 COPY libs libs
 COPY docker/entrypoint.sh docker/entrypoint.sh
@@ -48,6 +49,7 @@ RUN npm install -g pnpm
 RUN pnpm install --frozen-lockfile
 
 COPY --from=development /usr/src/app/dist ./dist
+COPY proto proto
 COPY apps/${APP_NAME}/drizzle apps/${APP_NAME}/drizzle
 COPY apps/${APP_NAME}/drizzle.config.ts apps/${APP_NAME}/drizzle.config.ts
 COPY docker/entrypoint.sh docker/entrypoint.sh

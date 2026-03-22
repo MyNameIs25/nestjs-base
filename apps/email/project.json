@@ -1,0 +1,14 @@
+{
+  "name": "email",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/email/src",
+  "projectType": "application",
+  "tags": ["scope:email", "type:app"],
+  "targets": {
+    "build": {},
+    "serve": {},
+    "test": {},
+    "lint": {},
+    "e2e": {}
+  }
+}

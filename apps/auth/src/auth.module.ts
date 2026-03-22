@@ -6,6 +6,7 @@ import {
   AppInterceptorModule,
   AppLoggerModule,
   AppMiddlewareModule,
+  EmailClientModule,
 } from '@app/common';
 import { AuthConfigModule, AuthConfigService } from './config';
 import { CoreModule } from './core';
@@ -33,6 +34,13 @@ import { AuthController } from './auth.controller';
           user: config.database.user,
           password: config.database.password,
         },
+      }),
+    }),
+    EmailClientModule.forRootAsync({
+      imports: [AuthConfigModule],
+      inject: [AuthConfigService],
+      useFactory: (config: AuthConfigService) => ({
+        url: config.email.grpcUrl,
       }),
     }),
     CoreModule.register({ localEnabled: true }),
